@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 
 // Hook real de productos
-import { useProducts } from "../hooks/useProducts";
+import { useProducts } from "../contexts/ProductsContext";
 
 // Componente ProductCard (importar el real)
 import { ProductCard } from "./ProductCard";

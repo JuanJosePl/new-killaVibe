@@ -6,7 +6,13 @@ import axios from 'axios';
  * @constant BASE_URL
  * @description URL base del backend
  */
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-vibeskilla.onrender.com/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-1o8n.onrender.com/';
+
+/**
+ * @constant AUTH_STORAGE_KEY
+ * @description Clave para localStorage (debe coincidir con AuthProvider)
+ */
+const AUTH_STORAGE_KEY = 'killavibes_auth';
 
 /**
  * @constant axiosInstance
@@ -19,11 +25,51 @@ const BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-vibeskilla.onr
  */
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+/**
+ * @function getStoredAuth
+ * @description Obtiene datos de autenticación de localStorage
+ * @returns {Object|null} { user, token, refreshToken } o null
+ */
+const getStoredAuth = () => {
+  try {
+    const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch (error) {
+    console.error('Error reading auth from localStorage:', error);
+    return null;
+  }
+};
+
+/**
+ * @function saveStoredAuth
+ * @description Guarda datos de autenticación en localStorage
+ * @param {Object} authData - { user, token, refreshToken }
+ */
+const saveStoredAuth = (authData) => {
+  try {
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
+  } catch (error) {
+    console.error('Error saving auth to localStorage:', error);
+  }
+};
+
+/**
+ * @function clearStoredAuth
+ * @description Limpia datos de autenticación de localStorage
+ */
+const clearStoredAuth = () => {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (error) {
+    console.error('Error clearing auth from localStorage:', error);
+  }
+};
 
 /**
  * @interceptor request
@@ -31,10 +77,10 @@ const axiosInstance = axios.create({
  */
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('killavibes-token');
+    const authData = getStoredAuth();
     
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (authData && authData.token) {
+      config.headers.Authorization = `Bearer ${authData.token}`;
     }
     
     return config;
@@ -64,21 +110,27 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('killavibes-refresh-token');
+        const authData = getStoredAuth();
         
-        if (!refreshToken) {
+        if (!authData || !authData.refreshToken) {
           throw new Error('No refresh token available');
         }
 
         // Intentar refrescar el token
-        const { data } = await axios.post(
+        const response = await axios.post(
           `${BASE_URL}/auth/refresh-token`,
-          { refreshToken }
+          { refreshToken: authData.refreshToken }
         );
 
-        if (data.success && data.data.token) {
-          const newToken = data.data.token;
-          localStorage.setItem('killavibes-token', newToken);
+        if (response.data.success && response.data.data.token) {
+          const newToken = response.data.data.token;
+          
+          // Actualizar el token en localStorage
+          const updatedAuthData = {
+            ...authData,
+            token: newToken
+          };
+          saveStoredAuth(updatedAuthData);
           
           // Reintentar request original con nuevo token
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
@@ -86,10 +138,14 @@ axiosInstance.interceptors.response.use(
         }
       } catch (refreshError) {
         // Si falla el refresh, logout
-        localStorage.removeItem('killavibes-token');
-        localStorage.removeItem('killavibes-refresh-token');
-        localStorage.removeItem('killavibes-user');
-        window.location.href = '/auth/login';
+        console.error('Token refresh failed:', refreshError);
+        clearStoredAuth();
+        
+        // Redirigir a login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/login';
+        }
+        
         return Promise.reject(refreshError);
       }
     }
@@ -100,6 +156,7 @@ axiosInstance.interceptors.response.use(
       statusCode: error.response?.status || 500,
       errors: error.response?.data?.errors || [],
       success: false,
+      response: error.response
     };
 
     return Promise.reject(formattedError);

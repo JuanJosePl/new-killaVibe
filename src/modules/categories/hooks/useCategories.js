@@ -1,145 +1,295 @@
-import { useState, useEffect } from 'react';
-import * as categoriesApi from '../api/categories.api';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { getCategories, searchCategories } from '../api/categories.api';
 
 /**
  * @hook useCategories
- * @description Hook para obtener categorías
- * @param {Object} options
- * @returns {Object}
+ * @description Hook principal para gestionar categorías con cache y filtros
+ * 
+ * CARACTERÍSTICAS:
+ * - Cache en memoria (5 min TTL)
+ * - Filtros avanzados
+ * - Paginación
+ * - Búsqueda
+ * - Auto-refresh
+ * 
+ * @param {Object} options - Opciones del hook
+ * @param {boolean} options.featured - Solo categorías destacadas
+ * @param {boolean} options.parentOnly - Solo categorías raíz
+ * @param {boolean} options.withProductCount - Incluir conteo de productos
+ * @param {string} options.sortBy - 'order'|'newest'|'views'|'name'|'productCount'
+ * @param {number} options.initialPage - Página inicial
+ * @param {number} options.pageSize - Items por página
+ * @param {boolean} options.autoFetch - Auto fetch al montar (default: true)
+ * @param {number} options.cacheTTL - TTL del cache en ms (default: 5min)
+ * 
+ * @returns {Object} Estado y métodos
  */
-export const useCategories = (options = {}) => {
+const useCategories = (options = {}) => {
+  const {
+    featured = false,
+    parentOnly = false,
+    withProductCount = false,
+    sortBy = 'order',
+    initialPage = 1,
+    pageSize = 50,
+    autoFetch = true,
+    cacheTTL = 5 * 60 * 1000, // 5 minutos
+  } = options;
+
+  // Estado
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [pagination, setPagination] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: initialPage,
+    limit: pageSize,
+    total: 0,
+    pages: 0,
+  });
 
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoading(true);
-        const response = await categoriesApi.getCategories(options);
+  // Cache
+  const cache = useRef({
+    data: null,
+    timestamp: null,
+    key: null,
+  });
 
-        if (response.success) {
-          setCategories(response.data || []);
-          setPagination(response.pagination || null);
-        } else {
-          setError(response.message);
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error al cargar categorías');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategories();
-  }, [JSON.stringify(options)]);
-
-  return { categories, loading, error, pagination };
-};
-
-/**
- * @hook useCategoryDetails
- * @description Hook para obtener detalles de una categoría
- * @param {string} slug
- * @returns {Object}
- */
-export const useCategoryDetails = (slug) => {
-  const [category, setCategory] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!slug) return;
-
-    const fetchCategory = async () => {
-      try {
-        setLoading(true);
-        const response = await categoriesApi.getCategoryBySlug(slug);
-
-        if (response.success) {
-          setCategory(response.data);
-        } else {
-          setError(response.message || 'Categoría no encontrada');
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error al cargar categoría');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchCategory();
-  }, [slug]);
-
-  return { category, loading, error };
-};
-
-/**
- * @hook useCategoryTree
- * @description Hook para obtener árbol jerárquico de categorías
- * @returns {Object}
- */
-export const useCategoryTree = () => {
-  const [tree, setTree] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const fetchTree = async () => {
-      try {
-        setLoading(true);
-        const response = await categoriesApi.getCategoryTree();
-
-        if (response.success) {
-          setTree(response.data || []);
-        } else {
-          setError(response.message);
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error al cargar categorías');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTree();
+  /**
+   * Genera clave de cache basada en params
+   */
+  const getCacheKey = useCallback((params) => {
+    return JSON.stringify({
+      featured: params.featured,
+      parentOnly: params.parentOnly,
+      withProductCount: params.withProductCount,
+      sortBy: params.sortBy,
+      page: params.page,
+      limit: params.limit,
+    });
   }, []);
 
-  return { tree, loading, error };
-};
+  /**
+   * Verifica si el cache es válido
+   */
+  const isCacheValid = useCallback((key) => {
+    if (!cache.current.data || !cache.current.timestamp) {
+      return false;
+    }
 
-/**
- * @hook useFeaturedCategories
- * @description Hook para obtener categorías destacadas
- * @param {number} limit
- * @returns {Object}
- */
-export const useFeaturedCategories = (limit = 6) => {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+    if (cache.current.key !== key) {
+      return false;
+    }
 
-  useEffect(() => {
-    const fetchFeatured = async () => {
-      try {
-        setLoading(true);
-        const response = await categoriesApi.getFeaturedCategories(limit);
+    const now = Date.now();
+    const elapsed = now - cache.current.timestamp;
 
-        if (response.success) {
-          setCategories(response.data || []);
-        } else {
-          setError(response.message);
-        }
-      } catch (err) {
-        setError(err.response?.data?.message || 'Error al cargar categorías');
-      } finally {
-        setLoading(false);
-      }
+    return elapsed < cacheTTL;
+  }, [cacheTTL]);
+
+  /**
+   * Actualiza el cache
+   */
+  const updateCache = useCallback((key, data) => {
+    cache.current = {
+      data,
+      timestamp: Date.now(),
+      key,
+    };
+  }, []);
+
+  /**
+   * Limpia el cache
+   */
+  const clearCache = useCallback(() => {
+    cache.current = {
+      data: null,
+      timestamp: null,
+      key: null,
+    };
+  }, []);
+
+  /**
+   * Obtener categorías con cache
+   */
+  const fetchCategories = useCallback(async (params = {}, forceRefresh = false) => {
+    const queryParams = {
+      featured: params.featured ?? featured,
+      parentOnly: params.parentOnly ?? parentOnly,
+      withProductCount: params.withProductCount ?? withProductCount,
+      sortBy: params.sortBy ?? sortBy,
+      page: params.page ?? pagination.page,
+      limit: params.limit ?? pagination.limit,
     };
 
-    fetchFeatured();
-  }, [limit]);
+    const cacheKey = getCacheKey(queryParams);
 
-  return { categories, loading, error };
+    // Usar cache si es válido y no es force refresh
+    if (!forceRefresh && isCacheValid(cacheKey)) {
+      const cached = cache.current.data;
+      setCategories(cached.data);
+      setPagination(cached.pagination);
+      return cached;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await getCategories(queryParams);
+      
+      const result = {
+        data: response.data,
+        pagination: response.pagination,
+      };
+
+      setCategories(result.data);
+      setPagination(result.pagination);
+      updateCache(cacheKey, result);
+
+      return result;
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Error al obtener categorías';
+      setError(errorMessage);
+      console.error('[useCategories] Error fetching:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    featured,
+    parentOnly,
+    withProductCount,
+    sortBy,
+    pagination.page,
+    pagination.limit,
+    getCacheKey,
+    isCacheValid,
+    updateCache,
+  ]);
+
+  /**
+   * Cambiar página
+   */
+  const goToPage = useCallback((page) => {
+    setPagination((prev) => ({ ...prev, page }));
+  }, []);
+
+  /**
+   * Página siguiente
+   */
+  const nextPage = useCallback(() => {
+    setPagination((prev) => {
+      if (prev.page < prev.pages) {
+        return { ...prev, page: prev.page + 1 };
+      }
+      return prev;
+    });
+  }, []);
+
+  /**
+   * Página anterior
+   */
+  const prevPage = useCallback(() => {
+    setPagination((prev) => {
+      if (prev.page > 1) {
+        return { ...prev, page: prev.page - 1 };
+      }
+      return prev;
+    });
+  }, []);
+
+  /**
+   * Refrescar datos
+   */
+  const refresh = useCallback(() => {
+    return fetchCategories({}, true);
+  }, [fetchCategories]);
+
+  /**
+   * Buscar categorías
+   */
+  const search = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setError('El término de búsqueda debe tener al menos 2 caracteres');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await searchCategories(query);
+      setCategories(response.data);
+      setPagination({
+        page: 1,
+        limit: response.data.length,
+        total: response.data.length,
+        pages: 1,
+      });
+      return response.data;
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || 'Error en la búsqueda';
+      setError(errorMessage);
+      console.error('[useCategories] Search error:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /**
+   * Reiniciar filtros
+   */
+  const resetFilters = useCallback(() => {
+    clearCache();
+    setPagination({
+      page: 1,
+      limit: pageSize,
+      total: 0,
+      pages: 0,
+    });
+  }, [clearCache, pageSize]);
+
+  // Auto fetch al montar o cuando cambie la página
+  useEffect(() => {
+    if (autoFetch) {
+      fetchCategories();
+    }
+  }, [pagination.page, autoFetch]); // Solo re-fetch cuando cambia la página
+
+  // Computed values
+  const isEmpty = categories.length === 0;
+  const hasMore = pagination.page < pagination.pages;
+  const hasPrev = pagination.page > 1;
+  const count = categories.length;
+
+  return {
+    // Data
+    categories,
+    category: categories[0] || null, // Primera categoría (útil para single fetch)
+    count,
+    
+    // Loading states
+    loading,
+    error,
+    isEmpty,
+    
+    // Pagination
+    pagination,
+    hasMore,
+    hasPrev,
+    goToPage,
+    nextPage,
+    prevPage,
+    
+    // Actions
+    fetchCategories,
+    search,
+    refresh,
+    resetFilters,
+    clearCache,
+    setError,
+  };
 };
+
+export default useCategories;

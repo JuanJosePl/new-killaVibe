@@ -1,18 +1,18 @@
 // page.jsx
 
-import { PageLayout } from "../components/page-layout"
-import { HeroSection } from "../components/hero-section"
-import { FeaturedProducts } from "../components/featured-products"
-import { TestimonialsSection } from "../components/testimonials-section"
-import CategoriesPage from "./categorias/page"
+import Layout from "./Layout"
+import { HeroSection } from "../shared/components/feedback/components/hero-section"
+import { FeaturedProducts } from "../modules/products/components/FeaturedProducts"
+import { TestimonialsSection } from "../shared/components/feedback/components/testimonials-section"
+// import CategoriesPage from "./categorias/page"
 
 export default function HomePage() {
   return (
-    <PageLayout>
+    <Layout>
       <HeroSection />
-      <FeaturedProducts />
-      < CategoriesPage/>
+       <FeaturedProducts /> 
+      {/* < CategoriesPage/> */}
       <TestimonialsSection />
-    </PageLayout>
+    </Layout>
   )
 }

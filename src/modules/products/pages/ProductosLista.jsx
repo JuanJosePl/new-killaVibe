@@ -1,195 +1,242 @@
-"use client"
+// src/modules/products/pages/ProductosLista.jsx
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { Search, ChevronDown, Filter, ArrowUpDown } from 'lucide-react';
 
-import { useState, useEffect, useCallback } from "react"
-import { useSearchParams } from "next/navigation"
-import Link from "next/link"
-import { Search, ChevronDown, Filter, ArrowUpDown } from "lucide-react"
-import { productsAPI } from "@/lib/api/products-api"
-import { formatPrice } from "@/lib/helpers/price-helpers"
-import { PAGINATION_LIMITS, PRODUCT_SORT_OPTIONS, SORT_ORDER } from "@/lib/types/product-types"
-import { ProductCard } from "@/components/product/product-card"
+// ============================================================================
+// APIs Y HOOKS
+// ============================================================================
+import { productsAPI } from '../api/products.api';
+import { useProductCart } from '../hooks/useProductCart';
+import { useProductWishlist } from '../hooks/useProductWishlist';
+
+// ============================================================================
+// UTILIDADES Y CONSTANTES
+// ============================================================================
+import { formatPrice } from '../utils/priceHelpers';
+import { PAGINATION_LIMITS, PRODUCT_SORT_OPTIONS, SORT_ORDER } from '../types/product.types';
+
+// ============================================================================
+// COMPONENTES
+// ============================================================================
+import { ProductCard } from '../components/ProductCard';
 
 /**
- * ProductosLista - Página principal de listado de productos
- * ✓ Fetch con paginación real
- * ✓ Filtros (precio, categoría, stock, rating)
- * ✓ Ordenamientos dinámicos
- * ✓ Control de favoritos
- * ✓ Loading y error handling
- * ✓ Limpieza de estados
+ * @component ProductosLista
+ * @description Página principal de listado de productos con integración completa
+ * 
+ * INTEGRACIÓN COMPLETA:
+ * ✅ Fetch con paginación real
+ * ✅ Filtros (precio, categoría, stock, rating)
+ * ✅ Ordenamientos dinámicos
+ * ✅ Cart integrado (agregar, loading, validaciones)
+ * ✅ Wishlist integrado (toggle, loading, validaciones)
+ * ✅ URL sync con react-router-dom
+ * ✅ Loading y error handling
+ * ✅ Estados granulares
  */
 export default function ProductosLista() {
-  const searchParams = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
-  // ========== ESTADO PRINCIPAL ==========
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [favorites, setFavorites] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("product_favorites")
-      return saved ? JSON.parse(saved) : []
-    }
-    return []
-  })
+  // ==========================================================================
+  // HOOKS DE CART Y WISHLIST
+  // ==========================================================================
 
-  // ========== FILTROS Y PAGINACIÓN ==========
-  const [page, setPage] = useState(Number.parseInt(searchParams.get("page")) || 1)
-  const [limit, setLimit] = useState(Number.parseInt(searchParams.get("limit")) || PAGINATION_LIMITS.DEFAULT)
-  const [sort, setSort] = useState(searchParams.get("sort") || PRODUCT_SORT_OPTIONS.NEWEST)
-  const [order, setOrder] = useState(searchParams.get("order") || SORT_ORDER.DESC)
+  const {
+    addProductToCart,
+    isProductInCart,
+    getProductQuantity,
+    loading: cartLoading,
+  } = useProductCart();
+
+  const {
+    toggleProductWishlist,
+    isProductInWishlist,
+    loading: wishlistLoading,
+  } = useProductWishlist();
+
+  // ==========================================================================
+  // ESTADO LOCAL
+  // ==========================================================================
+
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // FILTROS Y PAGINACIÓN
+  const [page, setPage] = useState(parseInt(searchParams.get('page')) || 1);
+  const [limit, setLimit] = useState(parseInt(searchParams.get('limit')) || PAGINATION_LIMITS.DEFAULT);
+  const [sort, setSort] = useState(searchParams.get('sort') || PRODUCT_SORT_OPTIONS.NEWEST);
+  const [order, setOrder] = useState(searchParams.get('order') || SORT_ORDER.DESC);
 
   // FILTROS ESPECÍFICOS
-  const [searchQuery, setSearchQuery] = useState(searchParams.get("search") || "")
-  const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "")
-  const [minPrice, setMinPrice] = useState(Number.parseInt(searchParams.get("minPrice")) || 0)
-  const [maxPrice, setMaxPrice] = useState(Number.parseInt(searchParams.get("maxPrice")) || 300000)
-  const [inStockOnly, setInStockOnly] = useState(searchParams.get("inStock") === "true" || false)
-  const [minRating, setMinRating] = useState(Number.parseInt(searchParams.get("rating")) || 0)
-  const [featured, setFeatured] = useState(searchParams.get("featured") === "true" || false)
+  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
+  const [minPrice, setMinPrice] = useState(parseInt(searchParams.get('minPrice')) || 0);
+  const [maxPrice, setMaxPrice] = useState(parseInt(searchParams.get('maxPrice')) || 300000);
+  const [inStockOnly, setInStockOnly] = useState(searchParams.get('inStock') === 'true' || false);
+  const [minRating, setMinRating] = useState(parseInt(searchParams.get('rating')) || 0);
+  const [featured, setFeatured] = useState(searchParams.get('featured') === 'true' || false);
 
   // UI STATE
-  const [viewMode, setViewMode] = useState("grid")
-  const [showFilters, setShowFilters] = useState(true)
-  const [pagination, setPagination] = useState(null)
+  const [showFilters, setShowFilters] = useState(true);
+  const [pagination, setPagination] = useState(null);
 
-  // ========== SYNC URL PARAMS ==========
+  // ==========================================================================
+  // SYNC URL PARAMS CON REACT-ROUTER-DOM
+  // ==========================================================================
+
   useEffect(() => {
-    const params = new URLSearchParams()
-    if (page !== 1) params.set("page", page.toString())
-    if (limit !== PAGINATION_LIMITS.DEFAULT) params.set("limit", limit.toString())
-    if (sort !== PRODUCT_SORT_OPTIONS.NEWEST) params.set("sort", sort)
-    if (order !== SORT_ORDER.DESC) params.set("order", order)
-    if (searchQuery) params.set("search", searchQuery)
-    if (selectedCategory) params.set("category", selectedCategory)
-    if (minPrice > 0) params.set("minPrice", minPrice.toString())
-    if (maxPrice < 300000) params.set("maxPrice", maxPrice.toString())
-    if (inStockOnly) params.set("inStock", "true")
-    if (minRating > 0) params.set("rating", minRating.toString())
-    if (featured) params.set("featured", "true")
+    const params = new URLSearchParams();
+    
+    if (page !== 1) params.set('page', page.toString());
+    if (limit !== PAGINATION_LIMITS.DEFAULT) params.set('limit', limit.toString());
+    if (sort !== PRODUCT_SORT_OPTIONS.NEWEST) params.set('sort', sort);
+    if (order !== SORT_ORDER.DESC) params.set('order', order);
+    if (searchQuery) params.set('search', searchQuery);
+    if (selectedCategory) params.set('category', selectedCategory);
+    if (minPrice > 0) params.set('minPrice', minPrice.toString());
+    if (maxPrice < 300000) params.set('maxPrice', maxPrice.toString());
+    if (inStockOnly) params.set('inStock', 'true');
+    if (minRating > 0) params.set('rating', minRating.toString());
+    if (featured) params.set('featured', 'true');
 
-    const queryString = params.toString()
-    if (queryString) {
-      window.history.replaceState({}, "", `/products?${queryString}`)
-    } else {
-      window.history.replaceState({}, "", "/products")
-    }
-  }, [page, limit, sort, order, searchQuery, selectedCategory, minPrice, maxPrice, inStockOnly, minRating, featured])
+    setSearchParams(params, { replace: true });
+  }, [page, limit, sort, order, searchQuery, selectedCategory, minPrice, maxPrice, inStockOnly, minRating, featured, setSearchParams]);
 
-  // ========== FETCH PRODUCTOS ==========
+  // ==========================================================================
+  // FETCH PRODUCTOS
+  // ==========================================================================
+
   const fetchProducts = useCallback(async () => {
     try {
-      setLoading(true)
-      setError(null)
+      setLoading(true);
+      setError(null);
 
       const filters = {
         page,
         limit,
         sort,
         order,
-        status: "active",
-        visibility: "public",
-      }
+        status: 'active',
+        visibility: 'public',
+      };
 
       // Agregar filtros opcionales
-      if (searchQuery) filters.search = searchQuery
-      if (selectedCategory) filters.category = selectedCategory
-      if (minPrice > 0) filters.minPrice = minPrice
-      if (maxPrice < 300000) filters.maxPrice = maxPrice
-      if (inStockOnly) filters.inStock = true
-      if (featured) filters.featured = true
+      if (searchQuery) filters.search = searchQuery;
+      if (selectedCategory) filters.category = selectedCategory;
+      if (minPrice > 0) filters.minPrice = minPrice;
+      if (maxPrice < 300000) filters.maxPrice = maxPrice;
+      if (inStockOnly) filters.inStock = true;
+      if (featured) filters.featured = true;
+      if (minRating > 0) filters.minRating = minRating;
 
-      const response = await productsAPI.getProducts(filters)
+      const response = await productsAPI.getProducts(filters);
 
       if (response.success) {
-        setProducts(response.data || [])
-        setPagination(response.pagination || {})
+        setProducts(response.data || []);
+        setPagination(response.pagination || {});
       } else {
-        setError(response.message || "Error al cargar productos")
-        setProducts([])
+        setError(response.message || 'Error al cargar productos');
+        setProducts([]);
       }
     } catch (err) {
-      console.error("[ProductosLista] Error fetching products:", err)
-      setError(err.response?.data?.message || "Error al cargar los productos. Intenta de nuevo.")
-      setProducts([])
+      console.error('[ProductosLista] Error fetching products:', err);
+      setError(err.response?.data?.message || 'Error al cargar los productos. Intenta de nuevo.');
+      setProducts([]);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [page, limit, sort, order, searchQuery, selectedCategory, minPrice, maxPrice, inStockOnly, featured])
+  }, [page, limit, sort, order, searchQuery, selectedCategory, minPrice, maxPrice, inStockOnly, featured, minRating]);
 
   // Llamar a fetch cuando cambian filtros
   useEffect(() => {
-    fetchProducts()
-  }, [fetchProducts])
+    fetchProducts();
+  }, [fetchProducts]);
 
-  // ========== FAVORITOS ==========
-  const toggleFavorite = useCallback((productId) => {
-    setFavorites((prev) => {
-      const updated = prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+  // ==========================================================================
+  // HANDLERS
+  // ==========================================================================
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("product_favorites", JSON.stringify(updated))
-      }
-      return updated
-    })
-  }, [])
-
-  const isFavorite = useCallback(
-    (productId) => {
-      return favorites.includes(productId)
-    },
-    [favorites],
-  )
-
-  // ========== HANDLERS ==========
   const handleResetFilters = useCallback(() => {
-    setPage(1)
-    setSearchQuery("")
-    setSelectedCategory("")
-    setMinPrice(0)
-    setMaxPrice(300000)
-    setInStockOnly(false)
-    setMinRating(0)
-    setFeatured(false)
-    setSort(PRODUCT_SORT_OPTIONS.NEWEST)
-    setOrder(SORT_ORDER.DESC)
-  }, [])
+    setPage(1);
+    setSearchQuery('');
+    setSelectedCategory('');
+    setMinPrice(0);
+    setMaxPrice(300000);
+    setInStockOnly(false);
+    setMinRating(0);
+    setFeatured(false);
+    setSort(PRODUCT_SORT_OPTIONS.NEWEST);
+    setOrder(SORT_ORDER.DESC);
+  }, []);
 
   const handleSortChange = useCallback((newSort) => {
     // Auto-set order for price sorts
-    if (newSort === PRODUCT_SORT_OPTIONS.PRICE_LOW || newSort === "price") {
-      setOrder(SORT_ORDER.ASC)
+    if (newSort === PRODUCT_SORT_OPTIONS.PRICE_LOW || newSort === 'price') {
+      setOrder(SORT_ORDER.ASC);
     } else {
-      setOrder(SORT_ORDER.DESC)
+      setOrder(SORT_ORDER.DESC);
     }
-    setSort(newSort)
-    setPage(1)
-  }, [])
+    setSort(newSort);
+    setPage(1);
+  }, []);
 
   const handleToggleOrder = useCallback(() => {
-    setOrder((prev) => (prev === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC))
-    setPage(1)
-  }, [])
+    setOrder((prev) => (prev === SORT_ORDER.ASC ? SORT_ORDER.DESC : SORT_ORDER.ASC));
+    setPage(1);
+  }, []);
 
   const handleSearchSubmit = useCallback((e) => {
-    e?.preventDefault?.()
-    setPage(1)
-  }, [])
+    e?.preventDefault?.();
+    setPage(1);
+  }, []);
 
-  // ========== COMPUTED VALUES ==========
-  const totalProducts = pagination?.total || 0
-  const totalPages = pagination?.pages || 0
+  // ==========================================================================
+  // CART & WISHLIST HANDLERS
+  // ==========================================================================
+
+  /**
+   * Agregar producto al carrito desde la lista
+   */
+  const handleAddToCart = useCallback(async (product) => {
+    await addProductToCart(product, 1);
+  }, [addProductToCart]);
+
+  /**
+   * Toggle wishlist desde la lista
+   */
+  const handleToggleWishlist = useCallback(async (product) => {
+    await toggleProductWishlist(product);
+  }, [toggleProductWishlist]);
+
+  // ==========================================================================
+  // COMPUTED VALUES
+  // ==========================================================================
+
+  const totalProducts = pagination?.total || 0;
+  const totalPages = pagination?.pages || 0;
   const hasFiltersActive =
-    searchQuery || selectedCategory || minPrice > 0 || maxPrice < 300000 || inStockOnly || minRating > 0 || featured
+    searchQuery ||
+    selectedCategory ||
+    minPrice > 0 ||
+    maxPrice < 300000 ||
+    inStockOnly ||
+    minRating > 0 ||
+    featured;
 
   const sortOptions = [
-    { value: PRODUCT_SORT_OPTIONS.NEWEST, label: "🆕 Más nuevos" },
-    { value: "price", label: "💰 Precio (menor)" },
-    { value: PRODUCT_SORT_OPTIONS.SALES, label: "🔥 Más vendidos" },
-    { value: PRODUCT_SORT_OPTIONS.RATING, label: "⭐ Mejor calificados" },
-  ]
+    { value: PRODUCT_SORT_OPTIONS.NEWEST, label: '🆕 Más nuevos' },
+    { value: 'price', label: '💰 Precio (menor)' },
+    { value: PRODUCT_SORT_OPTIONS.SALES, label: '🔥 Más vendidos' },
+    { value: PRODUCT_SORT_OPTIONS.RATING, label: '⭐ Mejor calificados' },
+  ];
 
-  // ========== RENDER ==========
+  // ==========================================================================
+  // RENDER
+  // ==========================================================================
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50">
       {/* HEADER */}
@@ -207,7 +254,7 @@ export default function ProductosLista() {
                 placeholder="Buscar productos..."
                 className="w-full px-4 py-2 pl-4 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
-              <Search className="absolute right-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute right-3 h-4 w-4 text-gray-400 pointer-events-none" />
             </form>
 
             {/* VIEW TOGGLE */}
@@ -229,7 +276,7 @@ export default function ProductosLista() {
               placeholder="Buscar productos..."
               className="w-full px-4 py-2 pl-4 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
             />
-            <Search className="absolute right-3 h-4 w-4 text-gray-400" />
+            <Search className="absolute right-3 h-4 w-4 text-gray-400 pointer-events-none" />
           </form>
         </div>
       </div>
@@ -265,8 +312,8 @@ export default function ProductosLista() {
                       step="10000"
                       value={minPrice}
                       onChange={(e) => {
-                        setMinPrice(Number(e.target.value))
-                        setPage(1)
+                        setMinPrice(Number(e.target.value));
+                        setPage(1);
                       }}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
@@ -277,8 +324,8 @@ export default function ProductosLista() {
                       step="10000"
                       value={maxPrice}
                       onChange={(e) => {
-                        setMaxPrice(Number(e.target.value))
-                        setPage(1)
+                        setMaxPrice(Number(e.target.value));
+                        setPage(1);
                       }}
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                     />
@@ -296,8 +343,8 @@ export default function ProductosLista() {
                       type="checkbox"
                       checked={inStockOnly}
                       onChange={(e) => {
-                        setInStockOnly(e.target.checked)
-                        setPage(1)
+                        setInStockOnly(e.target.checked);
+                        setPage(1);
                       }}
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
@@ -316,13 +363,13 @@ export default function ProductosLista() {
                           name="rating"
                           checked={minRating === rating}
                           onChange={() => {
-                            setMinRating(rating)
-                            setPage(1)
+                            setMinRating(rating);
+                            setPage(1);
                           }}
                           className="w-4 h-4 cursor-pointer"
                         />
                         <span className="text-sm text-gray-700">
-                          {rating === 0 ? "Cualquiera" : `${rating}⭐ y más`}
+                          {rating === 0 ? 'Cualquiera' : `${rating}⭐ y más`}
                         </span>
                       </label>
                     ))}
@@ -336,8 +383,8 @@ export default function ProductosLista() {
                       type="checkbox"
                       checked={featured}
                       onChange={(e) => {
-                        setFeatured(e.target.checked)
-                        setPage(1)
+                        setFeatured(e.target.checked);
+                        setPage(1);
                       }}
                       className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                     />
@@ -353,7 +400,9 @@ export default function ProductosLista() {
             {/* SORT BAR */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white rounded-2xl border border-gray-200 p-4">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700">{totalProducts.toLocaleString()} productos</span>
+                <span className="text-sm font-semibold text-gray-700">
+                  {totalProducts.toLocaleString()} productos
+                </span>
               </div>
 
               <div className="flex items-center gap-3">
@@ -377,7 +426,7 @@ export default function ProductosLista() {
                 <button
                   onClick={handleToggleOrder}
                   className="p-2 hover:bg-gray-100 rounded-lg border border-gray-300 transition-colors"
-                  title={`Ordenar ${order === "asc" ? "descendente" : "ascendente"}`}
+                  title={`Ordenar ${order === 'asc' ? 'descendente' : 'ascendente'}`}
                 >
                   <ArrowUpDown className="h-4 w-4 text-gray-600" />
                 </button>
@@ -388,7 +437,10 @@ export default function ProductosLista() {
             {error && (
               <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
                 <p className="text-red-800 font-medium">{error}</p>
-                <button onClick={fetchProducts} className="mt-2 text-sm text-red-600 hover:text-red-700 font-semibold">
+                <button
+                  onClick={fetchProducts}
+                  className="mt-2 text-sm text-red-600 hover:text-red-700 font-semibold"
+                >
                   Reintentar
                 </button>
               </div>
@@ -399,10 +451,10 @@ export default function ProductosLista() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="animate-pulse">
-                    <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-2xl h-64 mb-4"></div>
-                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-                    <div className="h-12 bg-gray-200 rounded-xl"></div>
+                    <div className="bg-gradient-to-br from-gray-200 to-gray-300 rounded-2xl h-64 mb-4" />
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+                    <div className="h-4 bg-gray-200 rounded w-1/2 mb-4" />
+                    <div className="h-12 bg-gray-200 rounded-xl" />
                   </div>
                 ))}
               </div>
@@ -429,16 +481,25 @@ export default function ProductosLista() {
             {!loading && products.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {products.map((product, index) => (
-                  <div key={product._id} className="animate-fade-in" style={{ animationDelay: `${index * 0.05}s` }}>
-                    <Link href={`/products/${product.slug}`}>
-                      <ProductCard
-                        product={product}
-                        showWishlistButton={true}
-                        onToggleWishlist={() => toggleFavorite(product._id)}
-                        isInWishlist={isFavorite(product._id)}
-                        className="h-full"
-                      />
-                    </Link>
+                  <div
+                    key={product._id}
+                    className="animate-fade-in"
+                    style={{ animationDelay: `${index * 0.05}s` }}
+                  >
+                    <ProductCard
+                      product={product}
+                      showWishlistButton={true}
+                      showAddToCart={true}
+                      onToggleWishlist={() => handleToggleWishlist(product)}
+                      onAddToCart={() => handleAddToCart(product)}
+                      isInWishlist={isProductInWishlist(product._id)}
+                      isInCart={isProductInCart(product._id)}
+                      cartQuantity={getProductQuantity(product._id)}
+                      cartLoading={cartLoading}
+                      wishlistLoading={wishlistLoading}
+                      className="h-full"
+                      onClick={() => navigate(`/productos/${product.slug}`)}
+                    />
                   </div>
                 ))}
               </div>
@@ -457,15 +518,15 @@ export default function ProductosLista() {
 
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum
+                    let pageNum;
                     if (totalPages <= 5) {
-                      pageNum = i + 1
+                      pageNum = i + 1;
                     } else if (page <= 3) {
-                      pageNum = i + 1
+                      pageNum = i + 1;
                     } else if (page >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i
+                      pageNum = totalPages - 4 + i;
                     } else {
-                      pageNum = page - 2 + i
+                      pageNum = page - 2 + i;
                     }
 
                     return (
@@ -473,12 +534,14 @@ export default function ProductosLista() {
                         key={pageNum}
                         onClick={() => setPage(pageNum)}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          page === pageNum ? "bg-blue-600 text-white" : "border border-gray-300 hover:bg-gray-50"
+                          page === pageNum
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 hover:bg-gray-50'
                         }`}
                       >
                         {pageNum}
                       </button>
-                    )
+                    );
                   })}
                 </div>
 
@@ -495,13 +558,13 @@ export default function ProductosLista() {
             {/* PAGE INFO */}
             {!loading && totalProducts > 0 && (
               <div className="text-center text-sm text-gray-600 pt-4">
-                Mostrando {Math.min((page - 1) * limit + 1, totalProducts)} - {Math.min(page * limit, totalProducts)} de{" "}
-                {totalProducts.toLocaleString()} productos
+                Mostrando {Math.min((page - 1) * limit + 1, totalProducts)} -{' '}
+                {Math.min(page * limit, totalProducts)} de {totalProducts.toLocaleString()} productos
               </div>
             )}
           </section>
         </div>
       </div>
     </main>
-  )
+  );
 }

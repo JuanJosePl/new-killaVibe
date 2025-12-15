@@ -16,13 +16,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../../core/hooks/useAuth";
 
 // Utilidades reales
-import { formatPrice, calculateDiscountPercentage } from "../../utils/priceHelpers";
+import { formatPrice, calculateDiscountPercentage } from "../utils/priceHelpers";
 import { 
   isNewProduct, 
   isLowStock, 
   getPrimaryImage, 
   isProductAvailable 
-} from "../../utils/productHelpers";
+} from "../utils/productHelpers";
 
 export function ProductCard({
   product,
