@@ -55,7 +55,7 @@ const LoadingScreen = () => (
 // ────────────────────────────────────────────────────────────────────────────
 
 const HomePage = lazy(() => import('../../app/PaginaPrincipal'));
-const ContactPage = lazy(() => import('../../app/contacto/Contacto'));
+const { ContactPage } = lazy(() => import('../../modules/contact/pages/Contacto'));
 const AboutPage = lazy(() => import('../../app/sobre-nosotros/SobreNosotros'));
 // const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 const WarrantyPage = lazy(() => import('../../app/garantia/Garantia'));

@@ -1,3 +1,5 @@
+// src/app/contacto/Contacto.jsx
+
 import {
   MapPin,
   Phone,
@@ -8,24 +10,55 @@ import {
   Send,
   CheckCircle2,
 } from "lucide-react";
-import { PageLayout } from "../../components/page-layout";
+import { PageLayout } from "../../../shared/components/feedback/components/page-layout";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "../../shared/components/ui/card";
-import { Input } from "../../shared/components/ui/input";
-import { Label } from "../../shared/components/ui/label";
-import { Textarea } from "../../shared/components/ui/textarea";
-import { Button } from "../../shared/components/ui/button";
-import { useContactForm } from "../../src/hooks/useContactForm";
+} from "../../../shared/components/ui/card";
+import { Input } from "../../../shared/components/ui/input";
+import { Label } from "../../../shared/components/ui/label";
+import { Textarea } from "../../../shared/components/ui/textarea";
+import { Button } from "../../../shared/components/ui/button";
+import { useContactForm } from "../hooks/useContactForm";
 
+/**
+ * @component ContactPage
+ * @description Página de contacto con formulario funcional
+ * 
+ * FUNCIONALIDADES:
+ * - Formulario de contacto con validación
+ * - Información de contacto (ubicación, teléfono, email, horario)
+ * - Enlaces a redes sociales
+ * - Feedback visual (loading, éxito, errores)
+ * - Anti-spam integrado (3 mensajes/hora)
+ * 
+ * INTEGRACIÓN CON BACKEND:
+ * - API: POST /api/contact
+ * - Hook: useContactForm (custom)
+ * - Validación: contactSchema (Yup)
+ * 
+ * ARQUITECTURA:
+ * PageLayout → ContactPage
+ *   ├─> Información de contacto (izquierda)
+ *   │   ├─> Ubicación
+ *   │   ├─> Teléfono
+ *   │   ├─> Email
+ *   │   ├─> Horario
+ *   │   └─> Redes sociales
+ *   └─> Formulario (derecha)
+ *       ├─> Campos validados
+ *       ├─> Loading state
+ *       ├─> Success state
+ *       └─> Error handling
+ */
 export default function ContactPage() {
   const {
     formData,
     isSubmitting,
     submitted,
+    errors,
     error,
     handleInputChange,
     handleSubmit,
@@ -168,12 +201,14 @@ export default function ContactPage() {
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Error general */}
                     {error && (
-                      <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
+                      <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
                         {error}
                       </div>
                     )}
 
+                    {/* Name y Phone (2 columnas) */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <Label htmlFor="name">Nombre *</Label>
@@ -185,7 +220,11 @@ export default function ContactPage() {
                           }
                           required
                           disabled={isSubmitting}
+                          className={errors.name ? 'border-red-500' : ''}
                         />
+                        {errors.name && (
+                          <p className="text-xs text-red-600 mt-1">{errors.name}</p>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="phone">Teléfono</Label>
@@ -197,10 +236,16 @@ export default function ContactPage() {
                             handleInputChange("phone", e.target.value)
                           }
                           disabled={isSubmitting}
+                          className={errors.phone ? 'border-red-500' : ''}
+                          placeholder="+57 300 123 4567"
                         />
+                        {errors.phone && (
+                          <p className="text-xs text-red-600 mt-1">{errors.phone}</p>
+                        )}
                       </div>
                     </div>
 
+                    {/* Email */}
                     <div>
                       <Label htmlFor="email">Email *</Label>
                       <Input
@@ -212,9 +257,15 @@ export default function ContactPage() {
                         }
                         required
                         disabled={isSubmitting}
+                        className={errors.email ? 'border-red-500' : ''}
+                        placeholder="tu@email.com"
                       />
+                      {errors.email && (
+                        <p className="text-xs text-red-600 mt-1">{errors.email}</p>
+                      )}
                     </div>
 
+                    {/* Subject */}
                     <div>
                       <Label htmlFor="subject">Asunto *</Label>
                       <Input
@@ -225,9 +276,15 @@ export default function ContactPage() {
                         }
                         required
                         disabled={isSubmitting}
+                        className={errors.subject ? 'border-red-500' : ''}
+                        placeholder="¿En qué podemos ayudarte?"
                       />
+                      {errors.subject && (
+                        <p className="text-xs text-red-600 mt-1">{errors.subject}</p>
+                      )}
                     </div>
 
+                    {/* Message */}
                     <div>
                       <Label htmlFor="message">Mensaje *</Label>
                       <Textarea
@@ -240,16 +297,24 @@ export default function ContactPage() {
                         required
                         disabled={isSubmitting}
                         placeholder="Por favor, describe tu consulta o mensaje en detalle..."
+                        className={errors.message ? 'border-red-500' : ''}
                       />
+                      {errors.message && (
+                        <p className="text-xs text-red-600 mt-1">{errors.message}</p>
+                      )}
                     </div>
 
+                    {/* Submit Button */}
                     <Button
                       type="submit"
                       disabled={isSubmitting}
                       className="w-full"
                     >
                       {isSubmitting ? (
-                        "Enviando..."
+                        <>
+                          <div className="h-4 w-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          Enviando...
+                        </>
                       ) : (
                         <>
                           <Send className="h-4 w-4 mr-2" />
