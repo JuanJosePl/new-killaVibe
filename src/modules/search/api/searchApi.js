@@ -15,7 +15,7 @@ const searchApi = {
    * @access  Public
    */
   getSearchSuggestions: async (query, limit = 5) => {
-    const response = await axiosInstance.get('/search/suggestions', {
+    const response = await axiosInstance.get('/api/search/suggestions', {
       params: { q: query, limit }
     });
     return response.data;
@@ -27,7 +27,7 @@ const searchApi = {
    * @access  Public
    */
   getPopularSearches: async (limit = 10, days = 30) => {
-    const response = await axiosInstance.get('/search/popular', {
+    const response = await axiosInstance.get('/api/search/popular', {
       params: { limit, days }
     });
     return response.data;
@@ -39,7 +39,7 @@ const searchApi = {
    * @access  Public
    */
   getTrendingSearches: async (limit = 10) => {
-    const response = await axiosInstance.get('/search/trending', {
+    const response = await axiosInstance.get('/api/search/trending', {
       params: { limit }
     });
     return response.data;
@@ -51,7 +51,7 @@ const searchApi = {
    * @access  Private
    */
   getUserSearchHistory: async (limit = 20) => {
-    const response = await axiosInstance.get('/search/history', {
+    const response = await axiosInstance.get('/api/search/history', {
       params: { limit }
     });
     return response.data;
@@ -63,7 +63,7 @@ const searchApi = {
    * @access  Private/Admin
    */
   getFailedSearches: async (limit = 20, days = 30) => {
-    const response = await axiosInstance.get('/search/admin/failed', {
+    const response = await axiosInstance.get('/api/search/admin/failed', {
       params: { limit, days }
     });
     return response.data;
@@ -75,7 +75,7 @@ const searchApi = {
    * @access  Private/Admin
    */
   getSearchStats: async (days = 30) => {
-    const response = await axiosInstance.get('/search/admin/stats', {
+    const response = await axiosInstance.get('/api/search/admin/stats', {
       params: { days }
     });
     return response.data;

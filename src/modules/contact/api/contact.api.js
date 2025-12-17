@@ -1,6 +1,6 @@
 // src/api/contact.js
 
-import axiosInstance from '../core/api/axiosInstance';
+import axiosInstance from '../../../core/api/axiosInstance';
 
 /**
  * @module ContactAPI

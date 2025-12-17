@@ -232,7 +232,7 @@ export const WishlistProvider = ({ children }) => {
     if (!initialized) {
       fetchWishlist();
     }
-  }, [initialized, fetchWishlist]);
+  }, []);
 
   // Helpers computados
   const isEmpty = isWishlistEmpty(wishlist);

@@ -2,9 +2,13 @@
 import { Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 
+// useScroll Hook
+
+import { useScrollToTop } from '../hooks/useScroll';
+
 // Guards
-import { PrivateRoute } from '../guards/PrivateRoute';
-import { AdminRoute } from '../guards/AdminRoute';
+import { PrivateRoute } from '../../core/guards/PrivateRoute';
+import { AdminRoute } from '../../core/guards/AdminRoute';
 
 // Layout
 import Layout from '../../app/Layout';
@@ -55,13 +59,14 @@ const LoadingScreen = () => (
 // ────────────────────────────────────────────────────────────────────────────
 
 const HomePage = lazy(() => import('../../app/PaginaPrincipal'));
-const { ContactPage } = lazy(() => import('../../modules/contact/pages/Contacto'));
+const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
 const AboutPage = lazy(() => import('../../app/sobre-nosotros/SobreNosotros'));
-// const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
+const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 const WarrantyPage = lazy(() => import('../../app/garantia/Garantia'));
 const ReturnsPage = lazy(() => import('../../app/devoluciones/Devoluciones'));
 const ShippingPage = lazy(() => import('../../app/envios/Envios'));
 const NotFoundPage = lazy(() => import('../../app/PaginaNoEncontrada'));
+const CategoriesPage = lazy(() => import('../../app/categorias/Categorias') )
 
 // ────────────────────────────────────────────────────────────────────────────
 // MÃDULO PRODUCTS (src/modules/products/pages/)
@@ -102,6 +107,7 @@ const RegisterPage = lazy(() => import('../../modules/auth/pages/Register'));
 export default function AppRouter() {
   return (
     <Suspense fallback={<LoadingScreen />}>
+      useScrollToTop()
       <Routes>
         
         {/* ================================================================== */}
@@ -120,10 +126,11 @@ export default function AppRouter() {
           {/* Páginas informativas */}
           <Route path="contacto" element={<ContactPage />} />
           <Route path="sobre-nosotros" element={<AboutPage />} />
-          {/* <Route path="ofertas" element={<OffersPage />} /> */}
+          <Route path="ofertas" element={<OffersPage />} />
           <Route path="garantia" element={<WarrantyPage />} />
           <Route path="devoluciones" element={<ReturnsPage />} />
           <Route path="envios" element={<ShippingPage />} />
+          <Route path='categorias' element={<CategoriesPage/>}/>
           
           {/* ────────────────────────────────────────────────────────────── */}
           {/* PRODUCTOS                                                       */}

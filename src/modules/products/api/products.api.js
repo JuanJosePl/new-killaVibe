@@ -58,6 +58,7 @@ export const productsAPI = {
     return await axiosInstance.get(url);
   },
 
+
   /**
    * @function getProductBySlug
    * @description Obtener producto por slug

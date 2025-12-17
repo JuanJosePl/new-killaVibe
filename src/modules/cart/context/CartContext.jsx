@@ -325,11 +325,19 @@ export const CartProvider = ({ children }) => {
   // INICIALIZACIÓN
   // ============================================================================
 
-  useEffect(() => {
-    // Cargar carrito al montar el provider
-    // Solo si hay usuario autenticado (verificar en tu contexto de auth)
-    fetchCart();
-  }, []);
+useEffect(() => {
+  // Cargar carrito al montar el provider
+  // La causa del error 429 "Too Many Requests" (bucle) es probable
+  // que 'fetchCart' esté cambiando en cada render debido a sus dependencias
+  // (cache.data), forzando al useEffect a re-ejecutarse continuamente.
+  
+  // SOLUCIÓN: Llama a fetchCart solo al montar el componente (dependencia vacía []).
+  // Deshabilitamos la advertencia del linter para permitir esta llamada única.
+  
+  fetchCart();
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // <--- Array de dependencias vacío para ejecución UNA SOLA VEZ al montar.
 
   // ============================================================================
   // VALOR DEL CONTEXTO
