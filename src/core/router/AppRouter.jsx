@@ -66,7 +66,7 @@ const WarrantyPage = lazy(() => import('../../app/garantia/Garantia'));
 const ReturnsPage = lazy(() => import('../../app/devoluciones/Devoluciones'));
 const ShippingPage = lazy(() => import('../../app/envios/Envios'));
 const NotFoundPage = lazy(() => import('../../app/PaginaNoEncontrada'));
-const CategoriesPage = lazy(() => import('../../app/categorias/Categorias') )
+// const CategoriesPage = lazy(() => import('../../app/categorias/Categorias'));
 
 // ────────────────────────────────────────────────────────────────────────────
 // MÃDULO PRODUCTS (src/modules/products/pages/)
@@ -130,7 +130,7 @@ export default function AppRouter() {
           <Route path="garantia" element={<WarrantyPage />} />
           <Route path="devoluciones" element={<ReturnsPage />} />
           <Route path="envios" element={<ShippingPage />} />
-          <Route path='categorias' element={<CategoriesPage/>}/>
+          {/* <Route path='categorias' element={<CategoriesPage/>}/>/ */}
           
           {/* ────────────────────────────────────────────────────────────── */}
           {/* PRODUCTOS                                                       */}
