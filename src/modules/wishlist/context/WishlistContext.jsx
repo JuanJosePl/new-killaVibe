@@ -303,6 +303,7 @@ export const WishlistProvider = ({ children }) => {
   // COMPUTED
   // ============================================================================
 
+
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = calculateItemCount(wishlist);
 

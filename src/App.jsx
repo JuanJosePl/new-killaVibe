@@ -10,7 +10,6 @@ import { CartProvider } from './modules/cart/context/CartContext';
 import { WishlistProvider } from './modules/wishlist/context/WishlistContext';
 import { SearchProvider } from './modules/search/context/SearchContext';
 import { ProductsProvider } from './modules/products/contexts/ProductsContext'; 
-import { CategoriesProvider } from './modules/categories/context/CategoriesContext';
 
 // ============================================================================
 // TOAST NOTIFICATIONS
@@ -81,7 +80,6 @@ function App() {
         */}
 
         <ProductsProvider>
-          <CategoriesProvider>
         <CartProvider>
           
           {/* 
@@ -133,7 +131,6 @@ function App() {
             </SearchProvider>
           </WishlistProvider>
         </CartProvider>
-        </CategoriesProvider>
         </ProductsProvider>
       </ThemeProvider>
     </Suspense>

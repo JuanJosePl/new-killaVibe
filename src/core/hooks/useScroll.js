@@ -1,3 +1,4 @@
+
 // src/core/hooks/useScroll.js
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -110,3 +111,4 @@ export const useScrollToElement = () => {
 };
 
 export default useScrollToTop;
+

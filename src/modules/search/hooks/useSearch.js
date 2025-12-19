@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 /**
  * @hook useSearch
  * @description Hook principal para búsquedas públicas y analytics
- * ✅ Optimizado para evitar rate limiting y loops infinitos
+ * ✅ CORREGIDO: Protección total contra rate limiting y loops
  * 
  * Maneja:
  * - Sugerencias en tiempo real
@@ -38,6 +38,11 @@ const useSearch = () => {
   const fetchingPopular = useRef(false);
   const fetchingTrending = useRef(false);
   const abortControllerRef = useRef(null);
+  
+  // ✅ NUEVO: Control de rate limiting
+  const lastPopularFetchRef = useRef(0);
+  const lastTrendingFetchRef = useRef(0);
+  const MIN_FETCH_INTERVAL = 3000; // 3 segundos mínimo entre llamadas
 
   // Cache mejorado con timestamps y keys
   const [cache, setCache] = useState({
@@ -52,6 +57,14 @@ const useSearch = () => {
     if (!cacheEntry || !cacheEntry.data || !cacheEntry.timestamp) return false;
     if (cacheEntry.key !== cacheKey) return false;
     return Date.now() - cacheEntry.timestamp < ttl;
+  }, []);
+
+  // ============================================================================
+  // HELPER: VERIFICAR RATE LIMIT
+  // ============================================================================
+  const canFetch = useCallback((lastFetchTime) => {
+    const timeSinceLastFetch = Date.now() - lastFetchTime;
+    return timeSinceLastFetch >= MIN_FETCH_INTERVAL;
   }, []);
 
   // ============================================================================
@@ -125,13 +138,14 @@ const useSearch = () => {
   
   /**
    * Obtener búsquedas populares
-   * ✅ Con protección contra llamadas duplicadas
+   * ✅ CORREGIDO: Con protección total contra rate limiting
    */
   const getPopularSearches = useCallback(async (limit = 10, days = 30) => {
     const cacheKey = `popular_${limit}_${days}`;
 
-    // 1. Revisar cache válido
+    // 1. Revisar caché válido
     if (isCacheValid(cache.popular, cacheKey)) {
+      console.log('[useSearch] Usando caché para popular searches');
       setPopularSearches(cache.popular.data);
       return cache.popular.data;
     }
@@ -142,16 +156,24 @@ const useSearch = () => {
       return popularSearches;
     }
 
+    // ✅ 3. NUEVO: Verificar rate limit temporal
+    if (!canFetch(lastPopularFetchRef.current)) {
+      console.log('[useSearch] Rate limit activo, usando datos en estado');
+      return popularSearches;
+    }
+
     fetchingPopular.current = true;
     setLoadingPopular(true);
 
     try {
+      lastPopularFetchRef.current = Date.now(); // Actualizar timestamp
+      
       const response = await searchApi.getPopularSearches(limit, days);
       const data = response.data || [];
       
       setPopularSearches(data);
       
-      // Actualizar cache
+      // Actualizar caché
       setCache(prev => ({
         ...prev,
         popular: {
@@ -167,18 +189,19 @@ const useSearch = () => {
       
       // Solo mostrar toast si no es rate limit (429)
       if (error.response?.status !== 429) {
-        toast.error('Error al cargar búsquedas populares');
+        // No mostrar toast en modo silencioso
+        console.warn('Error al cargar búsquedas populares');
       } else {
         console.warn('Rate limit alcanzado para búsquedas populares');
       }
       
-      setPopularSearches([]);
-      return [];
+      // ✅ No limpiar estado existente en caso de error
+      return popularSearches;
     } finally {
       setLoadingPopular(false);
       fetchingPopular.current = false;
     }
-  }, [cache.popular, isCacheValid, popularSearches]);
+  }, [cache.popular, isCacheValid, popularSearches, canFetch]);
 
   // ============================================================================
   // BÚSQUEDAS EN TENDENCIA
@@ -186,13 +209,14 @@ const useSearch = () => {
   
   /**
    * Obtener búsquedas en tendencia
-   * ✅ Con protección contra llamadas duplicadas
+   * ✅ CORREGIDO: Con protección total contra rate limiting
    */
   const getTrendingSearches = useCallback(async (limit = 10) => {
     const cacheKey = `trending_${limit}`;
 
-    // 1. Revisar cache válido
+    // 1. Revisar caché válido
     if (isCacheValid(cache.trending, cacheKey)) {
+      console.log('[useSearch] Usando caché para trending searches');
       setTrendingSearches(cache.trending.data);
       return cache.trending.data;
     }
@@ -203,16 +227,24 @@ const useSearch = () => {
       return trendingSearches;
     }
 
+    // ✅ 3. NUEVO: Verificar rate limit temporal
+    if (!canFetch(lastTrendingFetchRef.current)) {
+      console.log('[useSearch] Rate limit activo, usando datos en estado');
+      return trendingSearches;
+    }
+
     fetchingTrending.current = true;
     setLoadingTrending(true);
 
     try {
+      lastTrendingFetchRef.current = Date.now(); // Actualizar timestamp
+      
       const response = await searchApi.getTrendingSearches(limit);
       const data = response.data || [];
       
       setTrendingSearches(data);
       
-      // Actualizar cache
+      // Actualizar caché
       setCache(prev => ({
         ...prev,
         trending: {
@@ -228,25 +260,26 @@ const useSearch = () => {
       
       // Solo mostrar toast si no es rate limit (429)
       if (error.response?.status !== 429) {
-        toast.error('Error al cargar tendencias');
+        // No mostrar toast en modo silencioso
+        console.warn('Error al cargar tendencias');
       } else {
         console.warn('Rate limit alcanzado para tendencias');
       }
       
-      setTrendingSearches([]);
-      return [];
+      // ✅ No limpiar estado existente en caso de error
+      return trendingSearches;
     } finally {
       setLoadingTrending(false);
       fetchingTrending.current = false;
     }
-  }, [cache.trending, isCacheValid, trendingSearches]);
+  }, [cache.trending, isCacheValid, trendingSearches, canFetch]);
 
   // ============================================================================
   // UTILIDADES ADICIONALES
   // ============================================================================
 
   /**
-   * Invalidar cache manualmente
+   * Invalidar caché manualmente
    */
   const invalidateCache = useCallback((type) => {
     if (type === 'popular') {
@@ -273,11 +306,13 @@ const useSearch = () => {
    */
   const refreshPopular = useCallback(async (limit = 10, days = 30) => {
     invalidateCache('popular');
+    lastPopularFetchRef.current = 0; // Reset rate limit
     return getPopularSearches(limit, days);
   }, [invalidateCache, getPopularSearches]);
 
   const refreshTrending = useCallback(async (limit = 10) => {
     invalidateCache('trending');
+    lastTrendingFetchRef.current = 0; // Reset rate limit
     return getTrendingSearches(limit);
   }, [invalidateCache, getTrendingSearches]);
 
