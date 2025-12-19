@@ -3,29 +3,22 @@ import { Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 
 // Guards
-import { PrivateRoute } from '../guards/PrivateRoute';
-import { AdminRoute } from '../guards/AdminRoute';
+import { PrivateRoute } from '../../core/guards/PrivateRoute';
+import { AdminRoute } from '../../core/guards/AdminRoute';
 
 // Layout
 import Layout from '../../app/Layout';
 
+// Hooks 
+import { useScrollToTop } from '../hooks/useScroll';
+
 /**
  * @component AppRouter
  * @description Router principal de la aplicación
- * 
- * ESTRUCTURA:
- * - Rutas públicas (sin auth)
- * - Rutas de autenticación
- * - Rutas privadas (requieren auth)
- * - Rutas de administrador
- * - 404
- * 
- * ARQUITECTURA:
- * BrowserRouter (en main.jsx)
- *   → App.jsx
- *     → AppRouter
- *       → Layout (Header + Outlet + Footer)
- *         → Páginas
+ * ✅ CORREGIDO: 
+ * - Parámetro :slug para productos
+ * - useScrollToTop dentro del componente
+ * - Imports corregidos
  */
 
 // ============================================================================
@@ -51,55 +44,52 @@ const LoadingScreen = () => (
 // ============================================================================
 
 // ────────────────────────────────────────────────────────────────────────────
-// PÃGINAS PÃBLICAS (src/app/)
+// PÁGINAS PÚBLICAS (src/app/)
 // ────────────────────────────────────────────────────────────────────────────
 
 const HomePage = lazy(() => import('../../app/PaginaPrincipal'));
-const { ContactPage } = lazy(() => import('../../modules/contact/pages/Contacto'));
 const AboutPage = lazy(() => import('../../app/sobre-nosotros/SobreNosotros'));
-// const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 const WarrantyPage = lazy(() => import('../../app/garantia/Garantia'));
 const ReturnsPage = lazy(() => import('../../app/devoluciones/Devoluciones'));
 const ShippingPage = lazy(() => import('../../app/envios/Envios'));
 const NotFoundPage = lazy(() => import('../../app/PaginaNoEncontrada'));
+const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 
 // ────────────────────────────────────────────────────────────────────────────
-// MÃDULO PRODUCTS (src/modules/products/pages/)
+// MÓDULO PRODUCTS (src/modules/products/pages/)
 // ────────────────────────────────────────────────────────────────────────────
 
 const ProductsListPage = lazy(() => import('../../modules/products/pages/ProductosLista'));
 const ProductDetailPage = lazy(() => import('../../modules/products/pages/detalle/ProductoDetalle'));
 
 // ────────────────────────────────────────────────────────────────────────────
-// MÃDULO AUTH (src/modules/auth/pages/)
+// MÓDULO CATEGORIES (src/modules/categories/pages/)
+// ────────────────────────────────────────────────────────────────────────────
+
+const CategoriesPage = lazy(() => import('../../modules/categories/pages/CategoriesPage'));
+
+// ────────────────────────────────────────────────────────────────────────────
+// MÓDULO CONTACT (src/modules/contact/pages/)
+// ────────────────────────────────────────────────────────────────────────────
+
+const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// MÓDULO AUTH (src/modules/auth/pages/)
 // ────────────────────────────────────────────────────────────────────────────
 
 const LoginPage = lazy(() => import('../../modules/auth/pages/Login'));
 const RegisterPage = lazy(() => import('../../modules/auth/pages/Register'));
-
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO CART & WISHLIST (src/modules/cart/pages/ y src/modules/wishlist/pages/)
-// ────────────────────────────────────────────────────────────────────────────
-
-// Descomentar cuando existan estas páginas:
-// const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'));
-// const WishlistPage = lazy(() => import('../../modules/wishlist/pages/WishlistPage'));
-// const CheckoutPage = lazy(() => import('../../modules/checkout/pages/CheckoutPage'));
-
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO ADMIN (src/modules/admin/pages/)
-// ────────────────────────────────────────────────────────────────────────────
-
-// Descomentar cuando existan estas páginas:
-// const AdminDashboard = lazy(() => import('../../modules/admin/pages/AdminDashboard'));
-// const AdminProducts = lazy(() => import('../../modules/admin/pages/products/AdminProducts'));
-// const AdminUsers = lazy(() => import('../../modules/admin/pages/users/AdminUsers'));
 
 // ============================================================================
 // APP ROUTER COMPONENT
 // ============================================================================
 
 export default function AppRouter() {
+
+  useScrollToTop();
+
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
@@ -111,29 +101,43 @@ export default function AppRouter() {
         <Route element={<Layout />}>
           
           {/* ────────────────────────────────────────────────────────────── */}
-          {/* PÃGINAS PÃBLICAS                                                */}
+          {/* PÁGINAS PÚBLICAS                                                */}
           {/* ────────────────────────────────────────────────────────────── */}
           
           {/* Página principal */}
           <Route index element={<HomePage />} />
           
           {/* Páginas informativas */}
-          <Route path="contacto" element={<ContactPage />} />
           <Route path="sobre-nosotros" element={<AboutPage />} />
-          {/* <Route path="ofertas" element={<OffersPage />} /> */}
           <Route path="garantia" element={<WarrantyPage />} />
           <Route path="devoluciones" element={<ReturnsPage />} />
           <Route path="envios" element={<ShippingPage />} />
+          <Route path="ofertas" element={<OffersPage />} />
+          <Route path="contacto" element={<ContactPage />} />
           
           {/* ────────────────────────────────────────────────────────────── */}
-          {/* PRODUCTOS                                                       */}
+          {/* PRODUCTOS - ✅ CORREGIDO                                        */}
           {/* ────────────────────────────────────────────────────────────── */}
           
-          <Route path="productos" element={<ProductsListPage />} />
-          <Route path="productos/:id" element={<ProductDetailPage />} />
+          <Route path="productos">
+            {/* Lista de productos */}
+            <Route index element={<ProductsListPage />} />
+            
+            {/* ✅ Detalle por SLUG (SEO-friendly) */}
+            <Route path=":slug" element={<ProductDetailPage />} />
+            
+            {/* Categorías */}
+            <Route path="categoria/:categorySlug" element={<CategoriesPage />} />
+          </Route>
           
           {/* ────────────────────────────────────────────────────────────── */}
-          {/* CART & WISHLIST (Rutas públicas pero mejores con auth)         */}
+          {/* CATEGORÍAS (Ruta directa alternativa)                          */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          
+          <Route path="categorias" element={<CategoriesPage />} />
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* CART & WISHLIST                                                 */}
           {/* ────────────────────────────────────────────────────────────── */}
           
           {/* Descomentar cuando existan las páginas:
@@ -147,10 +151,9 @@ export default function AppRouter() {
           */}
           
           {/* ────────────────────────────────────────────────────────────── */}
-          {/* RUTAS PRIVADAS (Requieren autenticación)                       */}
+          {/* RUTAS PRIVADAS                                                  */}
           {/* ────────────────────────────────────────────────────────────── */}
           
-          {/* Perfil de usuario */}
           {/* Descomentar cuando existan:
           <Route path="perfil" element={
             <PrivateRoute>
@@ -168,42 +171,30 @@ export default function AppRouter() {
         </Route>
         
         {/* ================================================================== */}
-        {/* RUTAS SIN LAYOUT (Sin Header/Footer)                              */}
+        {/* RUTAS SIN LAYOUT                                                   */}
         {/* ================================================================== */}
         
         {/* ────────────────────────────────────────────────────────────── */}
-        {/* AUTENTICACIÃN                                                   */}
+        {/* AUTENTICACIÓN                                                   */}
         {/* ────────────────────────────────────────────────────────────── */}
         
         <Route path="auth/login" element={<LoginPage />} />
         <Route path="auth/register" element={<RegisterPage />} />
         
         {/* ────────────────────────────────────────────────────────────── */}
-        {/* ADMIN PANEL (Sin layout público)                               */}
+        {/* ADMIN PANEL                                                     */}
         {/* ────────────────────────────────────────────────────────────── */}
         
-        {/* Descomentar cuando existan las páginas:
+        {/* Descomentar cuando existan:
         <Route path="admin" element={
           <AdminRoute>
             <AdminDashboard />
           </AdminRoute>
         } />
-        
-        <Route path="admin/productos" element={
-          <AdminRoute>
-            <AdminProducts />
-          </AdminRoute>
-        } />
-        
-        <Route path="admin/usuarios" element={
-          <AdminRoute allowedRoles={['admin']}>
-            <AdminUsers />
-          </AdminRoute>
-        } />
         */}
         
         {/* ================================================================== */}
-        {/* 404 - PÃGINA NO ENCONTRADA                                        */}
+        {/* 404 - PÁGINA NO ENCONTRADA                                         */}
         {/* ================================================================== */}
         
         <Route path="*" element={<NotFoundPage />} />
@@ -212,3 +203,16 @@ export default function AppRouter() {
     </Suspense>
   );
 }
+
+/**
+ * RUTAS DISPONIBLES:
+ * - /                                    → HomePage
+ * - /productos                           → ProductsListPage
+ * - /productos/:slug                     → ProductDetailPage
+ * - /productos/categoria/:categorySlug   → CategoriesPage
+ * - /categorias                          → CategoriesPage
+ * - /contacto                            → ContactPage
+ * - /auth/login                          → LoginPage
+ * - /auth/register                       → RegisterPage
+ * - /*                                   → NotFoundPage
+ */

@@ -47,14 +47,7 @@ import { ProductReviews } from '../../components/ProductReviews';
 /**
  * @component ProductoDetalle
  * @description Página de detalle de producto con Cart y Wishlist integrados
- * 
- * INTEGRACIÃN COMPLETA:
- * ✅ useProductCart → agregar, actualizar cantidad, loading
- * ✅ useProductWishlist → toggle, verificar estado, loading
- * ✅ Validaciones de auth
- * ✅ Validaciones de stock
- * ✅ Estados de loading granulares
- * ✅ Error handling completo
+ * ✅ CORREGIDO: Mejor error handling y debugging
  */
 export default function ProductoDetalle() {
   const { slug } = useParams();
@@ -110,12 +103,14 @@ export default function ProductoDetalle() {
   const isNew = product ? isNewProduct(product) : false;
 
   // ==========================================================================
-  // FETCH PRODUCTO
+  // FETCH PRODUCTO - ✅ MEJORADO
   // ==========================================================================
 
   useEffect(() => {
+    // ✅ Validación inicial
     if (!slug || typeof slug !== 'string' || slug.trim().length === 0) {
-      setError('Producto no válido');
+      console.error('[ProductoDetalle] Slug inválido:', slug);
+      setError('URL de producto inválida');
       setLoading(false);
       return;
     }
@@ -125,31 +120,76 @@ export default function ProductoDetalle() {
         setLoading(true);
         setError(null);
 
+        console.log('[ProductoDetalle] Fetching product with slug:', slug);
+
+        // ✅ Llamada al API
         const response = await productsAPI.getProductBySlug(slug);
 
+        console.log('[ProductoDetalle] API Response:', response);
+
+        // ✅ Validación de respuesta
+        if (!response) {
+          throw new Error('No se recibió respuesta del servidor');
+        }
+
+        // ✅ Verificar si hay datos
         if (response.success && response.data) {
           const prod = response.data;
 
+          console.log('[ProductoDetalle] Product data:', prod);
+
+          // Validar estructura básica
           if (!prod._id || !prod.name) {
-            throw new Error('Estructura de producto inválida');
+            throw new Error('Datos de producto incompletos');
           }
 
           setProduct(prod);
+          setError(null);
 
           // Cargar productos relacionados
           if (prod._id) {
             fetchRelated(prod._id);
           }
         } else {
-          setError(response.message || 'Producto no encontrado');
+          // ✅ Manejo de respuesta sin éxito
+          const errorMsg = response.message || 'Producto no encontrado';
+          console.error('[ProductoDetalle] Error:', errorMsg);
+          setError(errorMsg);
+          setProduct(null);
         }
       } catch (err) {
-        console.error('[ProductoDetalle] Error:', err);
-        setError(
-          err.response?.data?.message ||
-            err.message ||
-            'Error al cargar el producto'
-        );
+        console.error('[ProductoDetalle] Catch Error:', err);
+
+        // ✅ Manejo específico de errores
+        let errorMessage = 'Error al cargar el producto';
+
+        if (err.response) {
+          // Error de respuesta del servidor
+          console.error('[ProductoDetalle] Response error:', err.response);
+          
+          const status = err.response.status;
+          const data = err.response.data;
+
+          if (status === 404) {
+            errorMessage = 'Producto no encontrado';
+          } else if (status === 401) {
+            errorMessage = 'Sesión no válida. Por favor inicia sesión.';
+          } else if (status === 429) {
+            errorMessage = 'Demasiadas peticiones. Espera un momento.';
+          } else if (data?.message) {
+            errorMessage = data.message;
+          }
+        } else if (err.request) {
+          // Error de red
+          console.error('[ProductoDetalle] Network error:', err.request);
+          errorMessage = 'Error de conexión. Verifica tu internet.';
+        } else {
+          // Otro tipo de error
+          errorMessage = err.message || errorMessage;
+        }
+
+        setError(errorMessage);
+        setProduct(null);
       } finally {
         setLoading(false);
       }
@@ -172,6 +212,7 @@ export default function ProductoDetalle() {
       }
     } catch (err) {
       console.error('[ProductoDetalle] Error fetching related:', err);
+      // No mostrar error al usuario, solo log
     } finally {
       setLoadingRelated(false);
     }
@@ -220,6 +261,15 @@ export default function ProductoDetalle() {
     [product]
   );
 
+  /**
+   * ✅ NUEVO: Reintentar carga
+   */
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    window.location.reload();
+  }, []);
+
   // ==========================================================================
   // RENDER: LOADING
   // ==========================================================================
@@ -228,15 +278,31 @@ export default function ProductoDetalle() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-10 bg-gray-200 rounded w-1/4" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-gray-200 rounded-2xl h-96" />
+          {/* Breadcrumb skeleton */}
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-8 animate-pulse" />
+
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 lg:p-10">
+              {/* Image skeleton */}
               <div className="space-y-4">
-                <div className="h-8 bg-gray-200 rounded w-3/4" />
-                <div className="h-6 bg-gray-200 rounded w-1/2" />
-                <div className="h-12 bg-gray-200 rounded" />
-                <div className="h-16 bg-gray-200 rounded" />
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl aspect-square animate-pulse" />
+                <div className="grid grid-cols-4 gap-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="bg-gray-200 dark:bg-gray-700 rounded-xl aspect-square animate-pulse"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Info skeleton */}
+              <div className="space-y-4">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse" />
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 animate-pulse" />
+                <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-14 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
               </div>
             </div>
           </div>
@@ -246,7 +312,7 @@ export default function ProductoDetalle() {
   }
 
   // ==========================================================================
-  // RENDER: ERROR
+  // RENDER: ERROR - ✅ MEJORADO
   // ==========================================================================
 
   if (error || !product) {
@@ -257,15 +323,36 @@ export default function ProductoDetalle() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
             Producto no encontrado
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-8">
+          <p className="text-gray-600 dark:text-gray-300 mb-2">
             {error || 'El producto que buscas no existe o fue eliminado.'}
           </p>
-          <div className="space-y-3">
+
+          {/* ✅ Información de debugging (solo en desarrollo) */}
+          {import.meta.env.DEV && (
+            <div className="mt-4 p-4 bg-gray-100 dark:bg-slate-800 rounded-lg text-left text-xs">
+              <p className="font-mono text-gray-700 dark:text-gray-300">
+                <strong>Slug:</strong> {slug}
+              </p>
+              <p className="font-mono text-red-600 dark:text-red-400 mt-2">
+                <strong>Error:</strong> {error || 'Producto no encontrado'}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3 mt-8">
+            <button
+              onClick={handleRetry}
+              className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            >
+              🔄 Reintentar
+            </button>
+
             <Link to="/productos">
               <button className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
                 Volver a productos
               </button>
             </Link>
+
             <button
               onClick={() => navigate(-1)}
               className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors font-semibold"
@@ -507,7 +594,7 @@ export default function ProductoDetalle() {
                   <button
                     onClick={handleAddToCart}
                     disabled={cartLoading || !isAvailable}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {cartLoading ? (
                       <>
@@ -577,7 +664,7 @@ export default function ProductoDetalle() {
               Descripción
             </h2>
             <div className="prose prose-sm dark:prose-invert text-gray-700 dark:text-gray-300 max-w-none">
-              <p>{product.description}</p>
+              <p className="whitespace-pre-wrap">{product.description}</p>
             </div>
           </div>
         )}

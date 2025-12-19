@@ -9,6 +9,8 @@ import { ThemeProvider } from './core/providers/ThemeProvider';
 import { CartProvider } from './modules/cart/context/CartContext';
 import { WishlistProvider } from './modules/wishlist/context/WishlistContext';
 import { SearchProvider } from './modules/search/context/SearchContext';
+import { ProductsProvider } from './modules/products/contexts/ProductsContext'; 
+import { CategoriesProvider } from './modules/categories/context/CategoriesContext';
 
 // ============================================================================
 // TOAST NOTIFICATIONS
@@ -77,6 +79,9 @@ function App() {
           Estado global del carrito
           API: /api/cart/*
         */}
+
+        <ProductsProvider>
+          <CategoriesProvider>
         <CartProvider>
           
           {/* 
@@ -128,6 +133,8 @@ function App() {
             </SearchProvider>
           </WishlistProvider>
         </CartProvider>
+        </CategoriesProvider>
+        </ProductsProvider>
       </ThemeProvider>
     </Suspense>
   );

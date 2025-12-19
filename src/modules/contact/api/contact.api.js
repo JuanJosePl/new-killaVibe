@@ -1,6 +1,6 @@
 // src/api/contact.js
 
-import axiosInstance from '../core/api/axiosInstance';
+import axiosInstance from '../../../core/api/axiosInstance';
 
 /**
  * @module ContactAPI
@@ -47,7 +47,7 @@ import axiosInstance from '../core/api/axiosInstance';
  */
 export const sendContactMessage = async (contactData) => {
   try {
-    const response = await axiosInstance.post('/api/contact', contactData);
+    const response = await axiosInstance.post('/contact', contactData);
     return response;
   } catch (error) {
     console.error('Error en sendContactMessage:', error);
@@ -79,7 +79,7 @@ export const sendContactMessage = async (contactData) => {
  */
 export const getContactMessages = async (params = {}) => {
   try {
-    const response = await axiosInstance.get('/api/contact/admin/messages', {
+    const response = await axiosInstance.get('/contact/admin/messages', {
       params
     });
     return response;
@@ -101,7 +101,7 @@ export const getContactMessages = async (params = {}) => {
 export const markMessageAsRead = async (messageId) => {
   try {
     const response = await axiosInstance.put(
-      `/api/contact/admin/messages/${messageId}/read`
+      `/contact/admin/messages/${messageId}/read`
     );
     return response;
   } catch (error) {
@@ -123,7 +123,7 @@ export const markMessageAsRead = async (messageId) => {
 export const replyToMessage = async (messageId, reply) => {
   try {
     const response = await axiosInstance.post(
-      `/api/contact/admin/messages/${messageId}/reply`,
+      `/contact/admin/messages/${messageId}/reply`,
       { reply }
     );
     return response;
@@ -145,7 +145,7 @@ export const replyToMessage = async (messageId, reply) => {
 export const deleteContactMessage = async (messageId) => {
   try {
     const response = await axiosInstance.delete(
-      `/api/contact/admin/messages/${messageId}`
+      `/contact/admin/messages/${messageId}`
     );
     return response;
   } catch (error) {

@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { toast } from 'react-toastify';
-import { sendContactMessage } from '../api/contact';
-import { contactSchema, contactInitialValues } from '../schemas/contactSchema';
+import { sendContactMessage } from '../api/contact.api';
+import { contactSchema, contactInitialValues } from '../schemas/contact.schema';
 
 /**
  * @hook useContactForm

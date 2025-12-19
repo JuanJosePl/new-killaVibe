@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 /**
  * @context SearchContext
  * @description Context global para estado de búsquedas
+ * ✅ Optimizado sin llamadas automáticas al backend
  * 
  * Proporciona:
  * - Estado de búsqueda actual
@@ -44,8 +45,16 @@ export const SearchProvider = ({ children }) => {
 
     setCurrentSearch(newSearch);
 
-    // Agregar a historial de navegación
+    // Agregar a historial de navegación (evitar duplicados consecutivos)
     setNavigationHistory(prev => {
+      const lastSearch = prev[0];
+      
+      // No agregar si es idéntica a la última búsqueda
+      if (lastSearch?.query === newSearch.query && 
+          JSON.stringify(lastSearch?.filters) === JSON.stringify(newSearch.filters)) {
+        return prev;
+      }
+
       const updated = [newSearch, ...prev];
       return updated.slice(0, 10); // Mantener solo últimas 10
     });

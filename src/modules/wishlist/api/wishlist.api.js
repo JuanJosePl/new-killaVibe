@@ -12,7 +12,7 @@ import axiosInstance from '../../../core/api/axiosInstance';
  * TODAS las rutas requieren JWT (authMiddleware)
  */
 
-const BASE_URL = '/api/wishlist';
+const BASE_URL = '/wishlist';
 
 /**
  * @function getWishlist

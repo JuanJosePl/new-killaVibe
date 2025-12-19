@@ -6,7 +6,7 @@ import axios from 'axios';
  * @constant BASE_URL
  * @description URL base del backend
  */
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-1o8n.onrender.com/';
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-vibeskilla.onrender.com/api';
 
 /**
  * @constant AUTH_STORAGE_KEY
