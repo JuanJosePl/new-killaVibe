@@ -64,8 +64,10 @@ const useCategoryTree = (options = {}) => {
   /**
    * Convierte árbol a lista plana (para selects, breadcrumbs)
    */
-  const flattenTree = useCallback((nodes, level = 0, parentPath = []) => {
+  const flattenTree = useCallback((nodes = [], level = 0, parentPath = []) => {
     let result = [];
+
+if (!nodes || !Array.isArray(nodes)) return result;
 
     nodes.forEach((node) => {
       const path = [...parentPath, node.name];
@@ -107,7 +109,7 @@ const useCategoryTree = (options = {}) => {
 
     try {
       const response = await getCategoryTree();
-      const treeData = response.data;
+      const treeData = response?.data || [];
       const flatData = flattenTree(treeData);
 
       setTree(treeData);
@@ -118,6 +120,7 @@ const useCategoryTree = (options = {}) => {
     } catch (err) {
       const errorMessage = err.response?.data?.message || err.message || 'Error al obtener árbol de categorías';
       setError(errorMessage);
+      setTree([]);
       console.error('[useCategoryTree] Error fetching:', err);
       throw err;
     } finally {
@@ -202,9 +205,10 @@ const useCategoryTree = (options = {}) => {
   /**
    * Contar total de categorías
    */
-  const countCategories = useCallback((nodes = tree) => {
-    let count = nodes.length;
+  const countCategories = useCallback((nodes = []) => {
+    if (!nodes || !Array.isArray(nodes)) return 0;
 
+    let count = nodes.length;
     nodes.forEach((node) => {
       if (node.children && node.children.length > 0) {
         count += countCategories(node.children);
@@ -212,7 +216,7 @@ const useCategoryTree = (options = {}) => {
     });
 
     return count;
-  }, [tree]);
+  }, []);
 
   /**
    * Obtener profundidad máxima del árbol
@@ -248,8 +252,8 @@ const useCategoryTree = (options = {}) => {
   }, [autoFetch, fetchTree]);
 
   // Computed values
-  const isEmpty = tree.length === 0;
-  const totalCategories = countCategories();
+  const isEmpty = (tree || []).length === 0;
+  const totalCategories = countCategories( tree || []);
   const maxDepth = getMaxDepth();
 
   return {

@@ -7,6 +7,7 @@ import {
   sortCategories,
   formatProductCount,
 } from '../utils/categoryHelpers';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * @page CategoriesPage
@@ -21,6 +22,7 @@ import {
  * - Loading states
  */
 const CategoriesPage = () => {
+  const navigate = useNavigate(); // Inicializa el hook
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     featured: false,
@@ -69,15 +71,16 @@ const CategoriesPage = () => {
   // Loading state
   if (loading && categories.length === 0) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="mt-4 text-gray-500">Conectando con el servidor...</p>
       </div>
-    );
-  }
+     );
+  };
+
+  if (error) {
+    return <div className="p-10 text-red-500">Error detectado: {error}</div>;
+  };
 
   // Error state
   if (error) {
@@ -108,7 +111,7 @@ const CategoriesPage = () => {
             Categorías
           </h1>
           <p className="text-gray-600">
-            Explora nuestras {pagination.total} categorías
+            Explora nuestras {pagination?.total || 0} categorías
           </p>
         </div>
 
@@ -199,9 +202,8 @@ const CategoriesPage = () => {
                   key={category._id}
                   category={category}
                   showProductCount
-                  featured={category.featured}
                   onClick={(cat) => {
-                    window.location.href = `/categorias/${cat.slug}`;
+                    navigate(`/categorias/${cat.slug}`);
                   }}
                 />
               ))}
@@ -211,7 +213,7 @@ const CategoriesPage = () => {
             {pagination.pages > 1 && (
               <div className="flex items-center justify-between bg-white rounded-lg shadow-sm p-4">
                 <div className="text-sm text-gray-600">
-                  Página {pagination.page} de {pagination.pages}
+                  Página {pagination?.page || 1} de {pagination?.pages || 1}
                 </div>
 
                 <div className="flex gap-2">
