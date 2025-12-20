@@ -134,27 +134,39 @@ const useCategories = (options = {}) => {
     setLoading(true);
     setError(null);
 
-    try {
-      const response = await getCategories(queryParams);
-      
-      const result = {
-        data: response.data,
-        pagination: response.pagination,
-      };
+try {
+  const response = await getCategories(queryParams);
+  // console.log("Respuesta de la API:", response); // Revisa esto en la consola
+  
+  const dataArray = Array.isArray(response) ? response : (response?.data || []);
 
-      setCategories(result.data);
-      setPagination(result.pagination);
-      updateCache(cacheKey, result);
+  // SOLUCIÓN: Asegurar que data y pagination tengan valores por defecto
+  const result = {
+    data: dataArray, 
+    pagination: response?.pagination || { 
+      page: queryParams.page, 
+      limit: queryParams.limit, 
+      total: dataArray.length, 
+      pages: 1 
+    },
+  };
 
-      return result;
-    } catch (err) {
-      const errorMessage = err.response?.data?.message || err.message || 'Error al obtener categorías';
-      setError(errorMessage);
-      console.error('[useCategories] Error fetching:', err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
+  setCategories(result.data);
+  setPagination(result.pagination);
+  updateCache(cacheKey, result);
+
+  return result;
+} catch (err) {
+  // Si hay error, mantenemos la paginación coherente para que el componente no rompa
+  setCategories([]); 
+  // No dejes la paginación como undefined
+ setError(err.message || 'Error al obtener categorías');
+  // Es recomendable no relanzar el error (throw err) si quieres que 
+  // la UI lo maneje mediante el estado 'error'
+} finally {
+  // ESTO ES LO MÁS IMPORTANTE: Desbloquea el estado de carga siempre.
+  setLoading(false);
+}
   }, [
     featured,
     parentOnly,
@@ -215,23 +227,22 @@ const useCategories = (options = {}) => {
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const response = await searchCategories(query);
-      setCategories(response.data);
+
+      const results = Array.isArray(response) ? response : (response?.data || []);
+
+      setCategories(results);
       setPagination({
         page: 1,
-        limit: response.data.length,
-        total: response.data.length,
+        limit: results.length,
+        total: results.length,
         pages: 1,
       });
-      return response.data;
+      return results;
     } catch (err) {
-      const errorMessage = err.response?.data?.message || err.message || 'Error en la búsqueda';
-      setError(errorMessage);
-      console.error('[useCategories] Search error:', err);
-      throw err;
+      setError(err.message || 'Error en la búsqueda');
     } finally {
       setLoading(false);
     }
@@ -255,7 +266,7 @@ const useCategories = (options = {}) => {
     if (autoFetch) {
       fetchCategories();
     }
-  }, [pagination.page, autoFetch]); // Solo re-fetch cuando cambia la página
+  }, [pagination.page, autoFetch, fetchCategories]); // Solo re-fetch cuando cambia la página
 
   // Computed values
   const isEmpty = categories.length === 0;

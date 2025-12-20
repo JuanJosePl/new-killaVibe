@@ -42,7 +42,10 @@ createRoot(document.getElementById('root')).render(
       Habilita React Router DOM
       ⚠️ Solo debe existir UNA instancia en toda la app
     */}
-    <BrowserRouter>
+    <BrowserRouter future={{
+    v7_startTransition: true,
+    v7_relativeSplatPath: true,
+  }}>
       
       {/* 
         ══════════════════════════════════════════════════════════════════════

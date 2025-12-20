@@ -69,6 +69,18 @@ const ProductDetailPage = lazy(() => import('../../modules/products/pages/detall
 // Categorías
 const CategoriesPage = lazy(() => import('../../modules/categories/pages/CategoriesPage'));
 
+const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/CategoryDetailPage'));
+
+// ────────────────────────────────────────────────────────────────────────────
+// MÓDULO CONTACT (src/modules/contact/pages/)
+// ────────────────────────────────────────────────────────────────────────────
+
+const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
+
+
+// ────────────────────────────────────────────────────────────────────────────
+// MÓDULO AUTH (src/modules/auth/pages/)
+// ────────────────────────────────────────────────────────────────────────────
 // Contacto
 const ContactPage = lazy(() => import('../../modules/contact/pages/Contacto'));
 
@@ -122,6 +134,7 @@ export default function AppRouter() {
           <Route path="productos">
             <Route index element={<ProductsListPage />} />
             <Route path=":slug" element={<ProductDetailPage />} />
+            
             <Route path="categoria/:categorySlug" element={<CategoriesPage />} />
           </Route>
           
@@ -155,6 +168,10 @@ export default function AppRouter() {
           {/* ────────────────────────────────────────────────────────────── */}
           {/* USERS MANAGEMENT                                                */}
           {/* ────────────────────────────────────────────────────────────── */}
+          
+          {/* Categorías */}
+          <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
+          <Route path="categorias" element={<CategoriesPage />} />
           <Route path="users">
             <Route index element={<UsersList />} />
             <Route path=":id" element={<UserDetails />} />
