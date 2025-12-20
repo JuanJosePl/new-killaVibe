@@ -68,6 +68,8 @@ const ProductDetailPage = lazy(() => import('../../modules/products/pages/detall
 
 const CategoriesPage = lazy(() => import('../../modules/categories/pages/CategoriesPage'));
 
+const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/CategoryDetailPage'));
+
 // ────────────────────────────────────────────────────────────────────────────
 // MÓDULO CONTACT (src/modules/contact/pages/)
 // ────────────────────────────────────────────────────────────────────────────
@@ -126,14 +128,14 @@ export default function AppRouter() {
             {/* ✅ Detalle por SLUG (SEO-friendly) */}
             <Route path=":slug" element={<ProductDetailPage />} />
             
-            {/* Categorías */}
-            <Route path="categoria/:categorySlug" element={<CategoriesPage />} />
           </Route>
           
           {/* ────────────────────────────────────────────────────────────── */}
           {/* CATEGORÍAS (Ruta directa alternativa)                          */}
           {/* ────────────────────────────────────────────────────────────── */}
           
+          {/* Categorías */}
+          <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
           <Route path="categorias" element={<CategoriesPage />} />
           
           {/* ────────────────────────────────────────────────────────────── */}

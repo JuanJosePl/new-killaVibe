@@ -120,12 +120,12 @@ export default function ProductoDetalle() {
         setLoading(true);
         setError(null);
 
-        console.log('[ProductoDetalle] Fetching product with slug:', slug);
+        // console.log('[ProductoDetalle] Fetching product with slug:', slug);
 
         // ✅ Llamada al API
         const response = await productsAPI.getProductBySlug(slug);
 
-        console.log('[ProductoDetalle] API Response:', response);
+        // console.log('[ProductoDetalle] API Response:', response);
 
         // ✅ Validación de respuesta
         if (!response) {
@@ -136,7 +136,7 @@ export default function ProductoDetalle() {
         if (response.success && response.data) {
           const prod = response.data;
 
-          console.log('[ProductoDetalle] Product data:', prod);
+          // console.log('[ProductoDetalle] Product data:', prod);
 
           // Validar estructura básica
           if (!prod._id || !prod.name) {

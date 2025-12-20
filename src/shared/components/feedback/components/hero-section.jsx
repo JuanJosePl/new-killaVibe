@@ -95,7 +95,7 @@ export function HeroSection() {
   // FETCH FEATURED PRODUCTS
   // ==========================================================================
   
-  useEffect(() => {
+useEffect(() => {
     let isMounted = true;
 
     const fetchFeaturedProducts = async () => {
@@ -103,7 +103,6 @@ export function HeroSection() {
         setLoading(true);
         setError(null);
 
-        // Usar API real del proyecto
         const response = await productsAPI.getProducts({
           featured: true,
           limit: 4,
@@ -113,15 +112,29 @@ export function HeroSection() {
           order: 'desc',
         });
 
-        if (isMounted && response.success && response.data) {
+        // REVISIÓN DE LOGICA:
+        // 1. Verificamos si response existe
+        // 2. Si la API devuelve los datos directo en 'response' o dentro de 'response.data'
+        const data = response.data || response;
+
+        if (isMounted && Array.isArray(data)) {
+          setFeaturedProducts(data.slice(0, 4));
+        } else if (isMounted && response.success && Array.isArray(response.data)) {
           setFeaturedProducts(response.data.slice(0, 4));
         } else {
-          throw new Error(response.message || 'Error al cargar productos');
+          // Solo lanzamos error si realmente no hay datos y no es un mensaje de éxito
+          if (response.message && !response.message.toLowerCase().includes('exito')) {
+             throw new Error(response.message);
+          }
+          // Si no hay datos, simplemente dejamos el array vacío sin disparar el catch de error
         }
       } catch (err) {
-        console.error('[HeroSection] Error fetching featured products:', err);
-        if (isMounted) {
-          setError(err.message || 'Error al cargar productos destacados');
+        // Solo logueamos y seteamos error si NO es el mensaje de éxito
+        if (err.message && !err.message.toLowerCase().includes('exito')) {
+          console.error('[HeroSection] Error fetching featured products:', err);
+          if (isMounted) {
+            setError(err.message || 'Error al cargar productos destacados');
+          }
         }
       } finally {
         if (isMounted) {
