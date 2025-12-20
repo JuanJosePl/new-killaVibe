@@ -34,15 +34,14 @@ export const WishlistProvider = ({ children }) => {
     timestamp: null,
   });
 
-  // ✅ PROTECCIÓN CONTRA LOOPS
+  // ✅ PROTECCIÓN: Refs para evitar loops
   const fetchInProgressRef = useRef(false);
-  const initializedRef = useRef(false);
+  const initializedOnceRef = useRef(false);
   const mountedRef = useRef(true);
 
   // ============================================================================
   // CACHE HELPERS
   // ============================================================================
-
   const isCacheValid = useCallback(() => {
     if (!cache.data || !cache.timestamp) return false;
     return Date.now() - cache.timestamp < WISHLIST_CACHE_CONFIG.TTL;
@@ -65,16 +64,15 @@ export const WishlistProvider = ({ children }) => {
   // ============================================================================
   // CORE ACTIONS
   // ============================================================================
-
   const fetchWishlist = useCallback(
     async (forceRefresh = false) => {
-      // ✅ Prevenir llamadas simultáneas
+      // ✅ GUARD 1: Prevenir llamadas simultáneas
       if (fetchInProgressRef.current) {
         console.log("[WishlistContext] Fetch ya en progreso, ignorando...");
         return wishlist;
       }
 
-      // ✅ Usar caché si es válido y no se fuerza refresh
+      // ✅ GUARD 2: Usar caché si es válido
       if (!forceRefresh && isCacheValid()) {
         console.log("[WishlistContext] Usando caché válido");
         setWishlist(cache.data);
@@ -89,7 +87,6 @@ export const WishlistProvider = ({ children }) => {
         const response = await wishlistAPI.getWishlist();
         const wishlistData = response.data;
 
-        // ✅ Solo actualizar si el componente sigue montado
         if (mountedRef.current) {
           setWishlist(wishlistData);
           updateCache(wishlistData);
@@ -101,16 +98,14 @@ export const WishlistProvider = ({ children }) => {
 
         const statusCode = err.response?.status;
 
-        // ✅ Manejo específico de errores
+        // ✅ GUARD 3: No mostrar errores de auth
         if (statusCode === 401) {
-          // Usuario no autenticado - NO reintentar
           if (mountedRef.current) {
-            setError(null); // No mostrar error en UI para 401
+            setError(null);
             setWishlist(null);
           }
           return null;
         } else if (statusCode === 429) {
-          // Rate limit - usar datos en caché si existen
           if (mountedRef.current) {
             setError("Demasiadas peticiones. Intenta en unos minutos.");
             if (cache.data) {
@@ -122,7 +117,9 @@ export const WishlistProvider = ({ children }) => {
         }
 
         if (mountedRef.current) {
-          setError(err.response?.data?.message || "Error al cargar la wishlist");
+          setError(
+            err.response?.data?.message || "Error al cargar la wishlist"
+          );
         }
         return null;
       } finally {
@@ -271,22 +268,21 @@ export const WishlistProvider = ({ children }) => {
   }, [fetchWishlist]);
 
   // ============================================================================
-  // INITIALIZATION - ✅ PROTEGIDO CONTRA DOBLE EJECUCIÓN
+  // INITIALIZATION - ✅ SOLO UNA VEZ
   // ============================================================================
-
   useEffect(() => {
     mountedRef.current = true;
 
-    // ✅ Solo ejecutar una vez
-    if (initializedRef.current) {
+    // ✅ GUARD: Solo ejecutar una vez
+    if (initializedOnceRef.current) {
       console.log("[WishlistContext] Ya inicializado, ignorando...");
       return;
     }
 
-    initializedRef.current = true;
+    initializedOnceRef.current = true;
     console.log("[WishlistContext] Inicializando por primera vez...");
-    
-    // ✅ Pequeño delay para evitar race conditions
+
+    // ✅ Delay mínimo para evitar race conditions
     const timer = setTimeout(() => {
       if (mountedRef.current) {
         fetchWishlist();
@@ -297,13 +293,11 @@ export const WishlistProvider = ({ children }) => {
       mountedRef.current = false;
       clearTimeout(timer);
     };
-  }, [fetchWishlist]);
+  }, []); // ✅ ARRAY VACÍO - Solo al montar
 
   // ============================================================================
   // COMPUTED
   // ============================================================================
-
-
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = calculateItemCount(wishlist);
 

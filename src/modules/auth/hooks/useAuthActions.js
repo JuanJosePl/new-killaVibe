@@ -1,8 +1,8 @@
 // src/modules/auth/hooks/useAuthActions.js
 
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../core/hooks/useAuth';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../../core/hooks/useAuth";
 
 /**
  * @hook useAuthActions
@@ -11,14 +11,14 @@ import { useAuth } from '../../../core/hooks/useAuth';
  * - Manejo de errores
  * - Redirección automática
  * - Callbacks de éxito/error
- * 
+ *
  * @param {Object} options
  * @param {Function} [options.onSuccess] - Callback ejecutado en éxito
  * @param {Function} [options.onError] - Callback ejecutado en error
  * @param {string} [options.redirectTo] - Ruta de redirección después de éxito
- * 
+ *
  * @returns {Object} { handleRegister, handleLogin, handleLogout, handleUpdateProfile, loading, error }
- * 
+ *
  * @example
  * const { handleLogin, loading, error } = useAuthActions({
  *   onSuccess: () => toast.success('Login exitoso'),
@@ -27,17 +27,17 @@ import { useAuth } from '../../../core/hooks/useAuth';
  */
 export const useAuthActions = (options = {}) => {
   const { onSuccess, onError, redirectTo } = options;
-  
+
   const { register, login, logout, updateProfile, user } = useAuth();
   const navigate = useNavigate();
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   /**
    * @function handleRegister
    * @description Maneja el proceso de registro
-   * 
+   *
    * @param {Object} userData - { email, password, firstName, lastName, phone? }
    * @returns {Promise<Object>} { success, user?, error? }
    */
@@ -65,7 +65,7 @@ export const useAuthActions = (options = {}) => {
         return result;
       } else {
         setError(result.error);
-        
+
         if (onError) {
           onError(result.error);
         }
@@ -73,9 +73,9 @@ export const useAuthActions = (options = {}) => {
         return result;
       }
     } catch (err) {
-      const errorMessage = err.message || 'Error inesperado al registrar';
+      const errorMessage = err.message || "Error inesperado al registrar";
       setError(errorMessage);
-      
+
       if (onError) {
         onError(errorMessage);
       }
@@ -89,7 +89,7 @@ export const useAuthActions = (options = {}) => {
   /**
    * @function handleLogin
    * @description Maneja el proceso de login
-   * 
+   *
    * @param {Object} credentials - { email, password }
    * @returns {Promise<Object>} { success, user?, error? }
    */
@@ -117,7 +117,7 @@ export const useAuthActions = (options = {}) => {
         return result;
       } else {
         setError(result.error);
-        
+
         if (onError) {
           onError(result.error);
         }
@@ -125,9 +125,9 @@ export const useAuthActions = (options = {}) => {
         return result;
       }
     } catch (err) {
-      const errorMessage = err.message || 'Error inesperado al iniciar sesión';
+      const errorMessage = err.message || "Error inesperado al iniciar sesión";
       setError(errorMessage);
-      
+
       if (onError) {
         onError(errorMessage);
       }
@@ -141,11 +141,11 @@ export const useAuthActions = (options = {}) => {
   /**
    * @function handleLogout
    * @description Maneja el proceso de logout
-   * 
+   *
    * @param {string} [redirectPath='/auth/login'] - Ruta de redirección después de logout
    * @returns {Promise<void>}
    */
-  const handleLogout = async (redirectPath = '/auth/login') => {
+  const handleLogout = async (redirectPath = "/auth/login") => {
     setLoading(true);
     setError(null);
 
@@ -154,15 +154,15 @@ export const useAuthActions = (options = {}) => {
 
       // Callback de éxito
       if (onSuccess) {
-        onSuccess({ message: 'Sesión cerrada exitosamente' });
+        onSuccess({ message: "Sesión cerrada exitosamente" });
       }
 
       // Redirección
       navigate(redirectPath, { replace: true });
     } catch (err) {
-      const errorMessage = err.message || 'Error al cerrar sesión';
+      const errorMessage = err.message || "Error al cerrar sesión";
       setError(errorMessage);
-      
+
       if (onError) {
         onError(errorMessage);
       }
@@ -177,7 +177,7 @@ export const useAuthActions = (options = {}) => {
   /**
    * @function handleUpdateProfile
    * @description Maneja la actualización de perfil
-   * 
+   *
    * @param {Object} profileData - { firstName?, lastName?, phone? }
    * @returns {Promise<Object>} { success, user?, error? }
    */
@@ -197,7 +197,7 @@ export const useAuthActions = (options = {}) => {
         return result;
       } else {
         setError(result.error);
-        
+
         if (onError) {
           onError(result.error);
         }
@@ -205,9 +205,9 @@ export const useAuthActions = (options = {}) => {
         return result;
       }
     } catch (err) {
-      const errorMessage = err.message || 'Error al actualizar perfil';
+      const errorMessage = err.message || "Error al actualizar perfil";
       setError(errorMessage);
-      
+
       if (onError) {
         onError(errorMessage);
       }
@@ -221,19 +221,18 @@ export const useAuthActions = (options = {}) => {
   /**
    * @function redirectByRole
    * @description Redirige al usuario según su rol
-   * 
+   *
    * @param {Object} userData - Usuario con rol
    */
+  // ✅ SIN setTimeout
   const redirectByRole = (userData) => {
-    const userRole = userData?.role || 'customer';
+    const userRole = userData?.role || "customer";
 
-    setTimeout(() => {
-      if (userRole === 'admin' || userRole === 'moderator') {
-        navigate('/admin', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
-    }, 500);
+    if (userRole === "admin" || userRole === "moderator") {
+      navigate("/admin", { replace: true });
+    } else {
+      navigate("/", { replace: true });
+    }
   };
 
   return {
