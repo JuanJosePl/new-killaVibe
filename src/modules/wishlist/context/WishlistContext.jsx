@@ -1,255 +1,315 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import * as wishlistAPI from '../api/wishlist.api';
-import { isWishlistEmpty, getItemCount } from '../utils/wishlistHelpers';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from "react";
 
-/**
- * @context WishlistContext
- * @description Context global para Wishlist con caché en memoria
- * 
- * SINCRONIZADO con CartContext (misma arquitectura)
- */
+import * as wishlistAPI from "../api/wishlist.api";
+import {
+  isWishlistEmpty,
+  getItemCount as calculateItemCount,
+} from "../utils/wishlistHelpers";
 
 const WishlistContext = createContext(null);
 
-// Configuración de caché
 const WISHLIST_CACHE_CONFIG = {
-  TTL: 5 * 60 * 1000 // 5 minutos
+  TTL: 5 * 60 * 1000, // 5 minutos
 };
 
-/**
- * @provider WishlistProvider
- * @description Provider global de Wishlist
- */
 export const WishlistProvider = ({ children }) => {
+  // ============================================================================
+  // STATE
+  // ============================================================================
   const [wishlist, setWishlist] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
 
-  // Caché en memoria (NO usar localStorage - no disponible en artifacts)
+  // Caché en memoria
   const [cache, setCache] = useState({
     data: null,
-    timestamp: null
+    timestamp: null,
   });
 
-  /**
-   * Verifica si el caché es válido
-   */
+  // ✅ PROTECCIÓN: Refs para evitar loops
+  const fetchInProgressRef = useRef(false);
+  const initializedOnceRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // ============================================================================
+  // CACHE HELPERS
+  // ============================================================================
   const isCacheValid = useCallback(() => {
     if (!cache.data || !cache.timestamp) return false;
-    const now = Date.now();
-    return (now - cache.timestamp) < WISHLIST_CACHE_CONFIG.TTL;
-  }, [cache]);
+    return Date.now() - cache.timestamp < WISHLIST_CACHE_CONFIG.TTL;
+  }, [cache.data, cache.timestamp]);
 
-  /**
-   * Actualiza el caché
-   */
   const updateCache = useCallback((data) => {
     setCache({
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }, []);
 
-  /**
-   * Limpia el caché
-   */
   const clearCache = useCallback(() => {
     setCache({
       data: null,
-      timestamp: null
+      timestamp: null,
     });
   }, []);
 
-  /**
-   * Obtener wishlist (con caché)
-   */
-  const fetchWishlist = useCallback(async (forceRefresh = false) => {
-    try {
-      // Si no es force refresh y tenemos caché válido, usar caché
+  // ============================================================================
+  // CORE ACTIONS
+  // ============================================================================
+  const fetchWishlist = useCallback(
+    async (forceRefresh = false) => {
+      // ✅ GUARD 1: Prevenir llamadas simultáneas
+      if (fetchInProgressRef.current) {
+        console.log("[WishlistContext] Fetch ya en progreso, ignorando...");
+        return wishlist;
+      }
+
+      // ✅ GUARD 2: Usar caché si es válido
       if (!forceRefresh && isCacheValid()) {
+        console.log("[WishlistContext] Usando caché válido");
         setWishlist(cache.data);
-        setInitialized(true);
         return cache.data;
       }
 
+      fetchInProgressRef.current = true;
       setLoading(true);
       setError(null);
 
-      const response = await wishlistAPI.getWishlist();
-      const wishlistData = response.data;
+      try {
+        const response = await wishlistAPI.getWishlist();
+        const wishlistData = response.data;
 
-      setWishlist(wishlistData);
-      updateCache(wishlistData);
-      setInitialized(true);
+        if (mountedRef.current) {
+          setWishlist(wishlistData);
+          updateCache(wishlistData);
+        }
 
-      return wishlistData;
-    } catch (err) {
-      console.error('[WishlistContext] Error fetching wishlist:', err);
-      setError(err.response?.data?.message || 'Error al cargar la wishlist');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [isCacheValid, cache.data, updateCache]);
+        return wishlistData;
+      } catch (err) {
+        console.error("[WishlistContext] Error fetching wishlist:", err);
 
-  /**
-   * Agregar item a wishlist
-   */
-  const addItem = useCallback(async (itemData) => {
-    try {
-      setLoading(true);
-      setError(null);
+        const statusCode = err.response?.status;
 
-      const response = await wishlistAPI.addItem(itemData);
-      const updatedWishlist = response.data;
+        // ✅ GUARD 3: No mostrar errores de auth
+        if (statusCode === 401) {
+          if (mountedRef.current) {
+            setError(null);
+            setWishlist(null);
+          }
+          return null;
+        } else if (statusCode === 429) {
+          if (mountedRef.current) {
+            setError("Demasiadas peticiones. Intenta en unos minutos.");
+            if (cache.data) {
+              setWishlist(cache.data);
+              return cache.data;
+            }
+          }
+          return null;
+        }
 
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
+        if (mountedRef.current) {
+          setError(
+            err.response?.data?.message || "Error al cargar la wishlist"
+          );
+        }
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+          setInitialized(true);
+        }
+        fetchInProgressRef.current = false;
+      }
+    },
+    [isCacheValid, updateCache, cache.data, wishlist]
+  );
 
-      return updatedWishlist;
-    } catch (err) {
-      console.error('[WishlistContext] Error adding item:', err);
-      const errorMsg = err.response?.data?.message || 'Error al agregar producto';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [updateCache]);
+  const addItem = useCallback(
+    async (itemData) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  /**
-   * Eliminar item de wishlist
-   */
-  const removeItem = useCallback(async (productId) => {
-    try {
-      setLoading(true);
-      setError(null);
+        const response = await wishlistAPI.addItem(itemData);
 
-      const response = await wishlistAPI.removeItem(productId);
-      const updatedWishlist = response.data;
+        if (response?.data && mountedRef.current) {
+          setWishlist(response.data);
+          updateCache(response.data);
+          return response;
+        }
 
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
+        return null;
+      } catch (err) {
+        console.error("[WishlistContext] Error adding item:", err);
+        if (mountedRef.current) {
+          setError(err.response?.data?.message || "Error al agregar producto");
+        }
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [updateCache]
+  );
 
-      return updatedWishlist;
-    } catch (err) {
-      console.error('[WishlistContext] Error removing item:', err);
-      const errorMsg = err.response?.data?.message || 'Error al eliminar producto';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [updateCache]);
+  const removeItem = useCallback(
+    async (productId) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-  /**
-   * Limpiar toda la wishlist
-   */
+        const response = await wishlistAPI.removeItem(productId);
+
+        if (response?.data && mountedRef.current) {
+          setWishlist(response.data);
+          updateCache(response.data);
+          return response;
+        }
+
+        return null;
+      } catch (err) {
+        console.error("[WishlistContext] Error removing item:", err);
+        if (mountedRef.current) {
+          setError(err.response?.data?.message || "Error al eliminar producto");
+        }
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [updateCache]
+  );
+
   const clearWishlistItems = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
       const response = await wishlistAPI.clearWishlist();
-      const updatedWishlist = response.data;
 
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
+      if (response?.data && mountedRef.current) {
+        setWishlist(response.data);
+        updateCache(response.data);
+        return response;
+      }
 
-      return updatedWishlist;
+      return null;
     } catch (err) {
-      console.error('[WishlistContext] Error clearing wishlist:', err);
-      const errorMsg = err.response?.data?.message || 'Error al vaciar wishlist';
-      setError(errorMsg);
-      throw err;
+      console.error("[WishlistContext] Error clearing wishlist:", err);
+      if (mountedRef.current) {
+        setError(err.response?.data?.message || "Error al vaciar wishlist");
+      }
+      return null;
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [updateCache]);
 
-  /**
-   * Verificar si producto está en wishlist
-   */
   const checkProduct = useCallback(async (productId) => {
     try {
       const response = await wishlistAPI.checkProduct(productId);
-      return response.inWishlist;
-    } catch (err) {
-      console.error('[WishlistContext] Error checking product:', err);
+      return response?.inWishlist ?? false;
+    } catch {
       return false;
     }
   }, []);
 
-  /**
-   * Mover items a carrito
-   */
-  const moveToCart = useCallback(async (productIds) => {
-    try {
-      setLoading(true);
-      setError(null);
+  const moveToCart = useCallback(
+    async (productIds) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const response = await wishlistAPI.moveToCart(productIds);
+        const response = await wishlistAPI.moveToCart(productIds);
+        await fetchWishlist(true);
 
-      // Refrescar wishlist después de mover
-      await fetchWishlist(true);
+        return response?.data ?? null;
+      } catch (err) {
+        console.error("[WishlistContext] Error moving to cart:", err);
+        if (mountedRef.current) {
+          setError(err.response?.data?.message || "Error al mover productos");
+        }
+        return null;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [fetchWishlist]
+  );
 
-      return response.data;
-    } catch (err) {
-      console.error('[WishlistContext] Error moving to cart:', err);
-      const errorMsg = err.response?.data?.message || 'Error al mover productos';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchWishlist]);
-
-  /**
-   * Obtener cambios de precio
-   */
   const getPriceChanges = useCallback(async () => {
     try {
       const response = await wishlistAPI.getPriceChanges();
-      return response.data;
-    } catch (err) {
-      console.error('[WishlistContext] Error getting price changes:', err);
-      throw err;
+      return response?.data ?? [];
+    } catch {
+      return [];
     }
   }, []);
 
-  /**
-   * Refrescar wishlist (force)
-   */
-  const refreshWishlist = useCallback(async () => {
-    return await fetchWishlist(true);
+  const refreshWishlist = useCallback(() => {
+    return fetchWishlist(true);
   }, [fetchWishlist]);
 
-  /**
-   * Cargar wishlist inicial
-   */
+  // ============================================================================
+  // INITIALIZATION - ✅ SOLO UNA VEZ
+  // ============================================================================
   useEffect(() => {
-    if (!initialized) {
-      fetchWishlist();
-    }
-  }, [initialized, fetchWishlist]);
+    mountedRef.current = true;
 
-  // Helpers computados
+    // ✅ GUARD: Solo ejecutar una vez
+    if (initializedOnceRef.current) {
+      console.log("[WishlistContext] Ya inicializado, ignorando...");
+      return;
+    }
+
+    initializedOnceRef.current = true;
+    console.log("[WishlistContext] Inicializando por primera vez...");
+
+    // ✅ Delay mínimo para evitar race conditions
+    const timer = setTimeout(() => {
+      if (mountedRef.current) {
+        fetchWishlist();
+      }
+    }, 100);
+
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timer);
+    };
+  }, []); // ✅ ARRAY VACÍO - Solo al montar
+
+  // ============================================================================
+  // COMPUTED
+  // ============================================================================
   const isEmpty = isWishlistEmpty(wishlist);
-  const itemCount = getItemCount(wishlist);
+  const itemCount = calculateItemCount(wishlist);
 
   const value = {
-    // Estado
     wishlist,
     loading,
     error,
     initialized,
 
-    // Helpers
     isEmpty,
     itemCount,
 
-    // Acciones
     fetchWishlist,
     addItem,
     removeItem,
@@ -259,9 +319,8 @@ export const WishlistProvider = ({ children }) => {
     getPriceChanges,
     refreshWishlist,
 
-    // Caché
     clearCache,
-    setError
+    setError,
   };
 
   return (
@@ -271,17 +330,13 @@ export const WishlistProvider = ({ children }) => {
   );
 };
 
-/**
- * @hook useWishlistContext
- * @description Hook para acceder al context
- */
 export const useWishlistContext = () => {
   const context = useContext(WishlistContext);
-  
   if (!context) {
-    throw new Error('useWishlistContext debe usarse dentro de WishlistProvider');
+    throw new Error(
+      "useWishlistContext debe usarse dentro de WishlistProvider"
+    );
   }
-  
   return context;
 };
 

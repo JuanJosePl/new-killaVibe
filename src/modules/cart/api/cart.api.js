@@ -13,7 +13,7 @@ import axiosInstance from '../../../core/api/axiosInstance';
  * AUTH: Todas las rutas requieren authMiddleware (JWT)
  */
 
-const BASE_URL = '/api/cart';
+const BASE_URL = '/cart';
 
 /**
  * @function getCart

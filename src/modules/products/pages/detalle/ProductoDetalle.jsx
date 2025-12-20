@@ -1,6 +1,5 @@
-// src/modules/products/pages/detalle/ProductoDetalle.jsx
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Heart,
   ShoppingCart,
@@ -14,20 +13,14 @@ import {
   Loader2,
   Plus,
   Minus,
-} from 'lucide-react';
-import { toast } from 'react-toastify';
+} from "lucide-react";
+import { toast } from "react-toastify";
 
-// ============================================================================
-// APIs Y HOOKS
-// ============================================================================
-import { productsAPI } from '../../api/products.api';
-import { useProductCart } from '../../hooks/useProductCart';
-import { useProductWishlist } from '../../hooks/useProductWishlist';
+import { productsAPI } from "../../api/products.api";
+import { useProductCart } from "../../hooks/useProductCart";
+import { useProductWishlist } from "../../hooks/useProductWishlist";
 
-// ============================================================================
-// UTILIDADES
-// ============================================================================
-import { formatPrice } from '../../utils/priceHelpers';
+import { formatPrice } from "../../utils/priceHelpers";
 import {
   isProductAvailable,
   isLowStock,
@@ -36,38 +29,24 @@ import {
   getAvailabilityText,
   isNewProduct,
   getAverageRating,
-} from '../../utils/productHelpers';
+} from "../../utils/productHelpers";
 
-// ============================================================================
-// COMPONENTES
-// ============================================================================
-import { ProductSpecs } from '../../components/ProductSpecs';
-import { ProductReviews } from '../../components/ProductReviews';
+import { ProductSpecs } from "../../components/ProductSpecs";
+import { ProductReviews } from "../../components/ProductReviews";
 
 /**
- * @component ProductoDetalle
- * @description Página de detalle de producto con Cart y Wishlist integrados
- * 
- * INTEGRACIÃN COMPLETA:
- * ✅ useProductCart → agregar, actualizar cantidad, loading
- * ✅ useProductWishlist → toggle, verificar estado, loading
- * ✅ Validaciones de auth
- * ✅ Validaciones de stock
- * ✅ Estados de loading granulares
- * ✅ Error handling completo
+ * ✅ CORRECCIÓN: Página de detalle optimizada sin doble fetch
  */
 export default function ProductoDetalle() {
   const { slug } = useParams();
   const navigate = useNavigate();
 
-  // ==========================================================================
-  // HOOKS DE CART Y WISHLIST
-  // ==========================================================================
-
+  // ============================================================================
+  // HOOKS
+  // ============================================================================
   const {
     addProductToCart,
     incrementQuantity,
-    decrementQuantity,
     isProductInCart,
     getProductQuantity,
     loading: cartLoading,
@@ -79,10 +58,9 @@ export default function ProductoDetalle() {
     loading: wishlistLoading,
   } = useProductWishlist();
 
-  // ==========================================================================
-  // ESTADO LOCAL
-  // ==========================================================================
-
+  // ============================================================================
+  // STATE
+  // ============================================================================
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -91,10 +69,14 @@ export default function ProductoDetalle() {
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [loadingRelated, setLoadingRelated] = useState(false);
 
-  // ==========================================================================
-  // COMPUTED VALUES
-  // ==========================================================================
+  // ✅ PROTECCIÓN: Ref para evitar doble fetch
+  const fetchInProgressRef = useRef(false);
+  const mountedRef = useRef(true);
+  const lastSlugRef = useRef(null);
 
+  // ============================================================================
+  // COMPUTED
+  // ============================================================================
   const inWishlist = product ? isProductInWishlist(product._id) : false;
   const inCart = product ? isProductInCart(product._id) : false;
   const cartQuantity = product ? getProductQuantity(product._id) : 0;
@@ -103,110 +85,194 @@ export default function ProductoDetalle() {
   const availabilityStatus = product ? getAvailabilityStatus(product) : null;
   const availabilityText = availabilityStatus
     ? getAvailabilityText(availabilityStatus)
-    : '';
+    : "";
   const averageRating = product ? getAverageRating(product) : 0;
   const isAvailable = product ? isProductAvailable(product) : false;
   const isLow = product ? isLowStock(product) : false;
   const isNew = product ? isNewProduct(product) : false;
 
-  // ==========================================================================
-  // FETCH PRODUCTO
-  // ==========================================================================
-
+  // ============================================================================
+  // FETCH PRODUCTO - ✅ OPTIMIZADO CON GUARDS
+  // ============================================================================
   useEffect(() => {
-    if (!slug || typeof slug !== 'string' || slug.trim().length === 0) {
-      setError('Producto no válido');
+    // ✅ GUARD 1: Validar slug
+    if (!slug || typeof slug !== "string" || slug.trim().length === 0) {
+      console.error("[ProductoDetalle] Slug inválido:", slug);
+      setError("URL de producto inválida");
       setLoading(false);
       return;
     }
 
+    // ✅ GUARD 2: Evitar fetch si es el mismo slug
+    if (lastSlugRef.current === slug) {
+      console.log("[ProductoDetalle] Mismo slug, ignorando fetch duplicado");
+      return;
+    }
+
+    // ✅ GUARD 3: Prevenir fetch simultáneos
+    if (fetchInProgressRef.current) {
+      console.log("[ProductoDetalle] Fetch ya en progreso, ignorando...");
+      return;
+    }
+
+    const abortController = new AbortController();
+
     const fetchProduct = async () => {
+      fetchInProgressRef.current = true;
+      lastSlugRef.current = slug;
+
       try {
         setLoading(true);
         setError(null);
 
-        const response = await productsAPI.getProductBySlug(slug);
+        console.log("[ProductoDetalle] Fetching product:", slug);
 
-        if (response.success && response.data) {
+        const response = await productsAPI.getProductBySlug(slug, {
+          signal: abortController.signal,
+        });
+
+        if (!mountedRef.current) return;
+
+        if (response?.success && response.data) {
           const prod = response.data;
 
           if (!prod._id || !prod.name) {
-            throw new Error('Estructura de producto inválida');
+            throw new Error("Datos de producto incompletos");
           }
 
           setProduct(prod);
+          setError(null);
 
-          // Cargar productos relacionados
+          // Cargar relacionados SOLO si hay ID válido
           if (prod._id) {
             fetchRelated(prod._id);
           }
         } else {
-          setError(response.message || 'Producto no encontrado');
+          const errorMsg = response?.message || "Producto no encontrado";
+          setError(errorMsg);
+          setProduct(null);
         }
       } catch (err) {
-        console.error('[ProductoDetalle] Error:', err);
-        setError(
-          err.response?.data?.message ||
-            err.message ||
-            'Error al cargar el producto'
-        );
+        if (err.name === "AbortError") {
+          console.log("[ProductoDetalle] Fetch cancelado");
+          return;
+        }
+
+        if (!mountedRef.current) return;
+
+        console.error("[ProductoDetalle] Error:", err);
+
+        let errorMessage = "Error al cargar el producto";
+
+        if (err.response) {
+          const status = err.response.status;
+          const data = err.response.data;
+
+          if (status === 404) {
+            errorMessage = "Producto no encontrado";
+          } else if (status === 401) {
+            errorMessage = "Sesión no válida. Por favor inicia sesión.";
+          } else if (status === 429) {
+            errorMessage = "Demasiadas peticiones. Espera un momento.";
+          } else if (data?.message) {
+            errorMessage = data.message;
+          }
+        } else if (err.request) {
+          errorMessage = "Error de conexión. Verifica tu internet.";
+        } else {
+          errorMessage = err.message || errorMessage;
+        }
+
+        setError(errorMessage);
+        setProduct(null);
       } finally {
-        setLoading(false);
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        fetchInProgressRef.current = false;
       }
     };
 
     fetchProduct();
-  }, [slug]);
 
-  // ==========================================================================
-  // FETCH PRODUCTOS RELACIONADOS
-  // ==========================================================================
+    // ✅ CLEANUP: Cancelar fetch al desmontar
+    return () => {
+      abortController.abort();
+    };
+  }, [slug]); // ✅ SOLO slug como dependencia
 
-  const fetchRelated = async (productId) => {
+  // ============================================================================
+  // FETCH RELACIONADOS - ✅ OPTIMIZADO
+  // ============================================================================
+  const fetchRelated = useCallback(async (productId) => {
+    // ✅ GUARD: Validar ID antes de fetch
+    if (!productId || typeof productId !== "string") {
+      console.warn(
+        "[ProductoDetalle] ID inválido para relacionados:",
+        productId
+      );
+      return;
+    }
+
     try {
       setLoadingRelated(true);
+
+      console.log(
+        "[ProductoDetalle] Fetching related products for:",
+        productId
+      );
+
       const response = await productsAPI.getRelatedProducts(productId, 4);
 
-      if (response.success) {
+      if (!mountedRef.current) return;
+
+      if (response?.success) {
         setRelatedProducts(response.data || []);
       }
     } catch (err) {
-      console.error('[ProductoDetalle] Error fetching related:', err);
+      console.error("[ProductoDetalle] Error fetching related:", err);
+      // No mostrar error al usuario, solo log
+      if (mountedRef.current) {
+        setRelatedProducts([]);
+      }
     } finally {
-      setLoadingRelated(false);
+      if (mountedRef.current) {
+        setLoadingRelated(false);
+      }
     }
-  };
+  }, []); // ✅ Sin dependencias
 
-  // ==========================================================================
+  // ============================================================================
+  // CLEANUP AL DESMONTAR
+  // ============================================================================
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      fetchInProgressRef.current = false;
+      lastSlugRef.current = null;
+    };
+  }, []);
+
+  // ============================================================================
   // HANDLERS
-  // ==========================================================================
-
-  /**
-   * Toggle wishlist con loading
-   */
+  // ============================================================================
   const handleToggleWishlist = useCallback(async () => {
     if (!product) return;
     await toggleProductWishlist(product);
   }, [product, toggleProductWishlist]);
 
-  /**
-   * Agregar al carrito o incrementar cantidad
-   */
   const handleAddToCart = useCallback(async () => {
     if (!product) return;
 
     if (inCart) {
-      // Si ya está, incrementar
       await incrementQuantity(product);
     } else {
-      // Si no está, agregar
       await addProductToCart(product, quantity);
     }
   }, [product, inCart, quantity, addProductToCart, incrementQuantity]);
 
-  /**
-   * Manejar cambio de cantidad
-   */
   const handleQuantityChange = useCallback(
     (newQty) => {
       if (newQty < 1) return;
@@ -220,23 +286,40 @@ export default function ProductoDetalle() {
     [product]
   );
 
-  // ==========================================================================
-  // RENDER: LOADING
-  // ==========================================================================
+  const handleRetry = useCallback(() => {
+    lastSlugRef.current = null; // Reset para permitir refetch
+    setLoading(true);
+    setError(null);
+    window.location.reload();
+  }, []);
 
+  // ============================================================================
+  // RENDER: LOADING
+  // ============================================================================
   if (loading) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-10 bg-gray-200 rounded w-1/4" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="bg-gray-200 rounded-2xl h-96" />
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-8 animate-pulse" />
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 lg:p-10">
               <div className="space-y-4">
-                <div className="h-8 bg-gray-200 rounded w-3/4" />
-                <div className="h-6 bg-gray-200 rounded w-1/2" />
-                <div className="h-12 bg-gray-200 rounded" />
-                <div className="h-16 bg-gray-200 rounded" />
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-2xl aspect-square animate-pulse" />
+                <div className="grid grid-cols-4 gap-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="bg-gray-200 dark:bg-gray-700 rounded-xl aspect-square animate-pulse"
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4 animate-pulse" />
+                <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2 animate-pulse" />
+                <div className="h-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                <div className="h-14 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
               </div>
             </div>
           </div>
@@ -245,10 +328,9 @@ export default function ProductoDetalle() {
     );
   }
 
-  // ==========================================================================
+  // ============================================================================
   // RENDER: ERROR
-  // ==========================================================================
-
+  // ============================================================================
   if (error || !product) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 flex items-center justify-center">
@@ -257,15 +339,35 @@ export default function ProductoDetalle() {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
             Producto no encontrado
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mb-8">
-            {error || 'El producto que buscas no existe o fue eliminado.'}
+          <p className="text-gray-600 dark:text-gray-300 mb-2">
+            {error || "El producto que buscas no existe o fue eliminado."}
           </p>
-          <div className="space-y-3">
+
+          {import.meta.env.DEV && (
+            <div className="mt-4 p-4 bg-gray-100 dark:bg-slate-800 rounded-lg text-left text-xs">
+              <p className="font-mono text-gray-700 dark:text-gray-300">
+                <strong>Slug:</strong> {slug}
+              </p>
+              <p className="font-mono text-red-600 dark:text-red-400 mt-2">
+                <strong>Error:</strong> {error || "Producto no encontrado"}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-3 mt-8">
+            <button
+              onClick={handleRetry}
+              className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+            >
+              🔄 Reintentar
+            </button>
+
             <Link to="/productos">
               <button className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold">
                 Volver a productos
               </button>
             </Link>
+
             <button
               onClick={() => navigate(-1)}
               className="w-full px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors font-semibold"
@@ -278,14 +380,12 @@ export default function ProductoDetalle() {
     );
   }
 
-  // ==========================================================================
+  // ============================================================================
   // RENDER: SUCCESS
-  // ==========================================================================
-
+  // ============================================================================
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* BREADCRUMB */}
         <Link
           to="/productos"
           className="flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-8 font-semibold"
@@ -294,12 +394,10 @@ export default function ProductoDetalle() {
           Volver a productos
         </Link>
 
-        {/* PRODUCT HEADER */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 lg:p-10">
             {/* GALLERY */}
             <div className="space-y-4">
-              {/* Main Image */}
               <div className="relative bg-gray-100 dark:bg-slate-700 rounded-2xl overflow-hidden aspect-square group">
                 {primaryImage ? (
                   <img
@@ -313,7 +411,6 @@ export default function ProductoDetalle() {
                   </div>
                 )}
 
-                {/* Badges */}
                 <div className="absolute top-4 left-4 flex flex-col gap-2">
                   {isNew && (
                     <span className="inline-flex bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold">
@@ -334,32 +431,28 @@ export default function ProductoDetalle() {
                     )}
                 </div>
 
-                {/* Wishlist Button */}
                 <button
                   onClick={handleToggleWishlist}
                   disabled={wishlistLoading}
                   className={`absolute top-4 right-4 p-3 rounded-full shadow-md hover:shadow-lg transition-shadow ${
                     inWishlist
-                      ? 'bg-red-500 text-white'
-                      : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200'
+                      ? "bg-red-500 text-white"
+                      : "bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200"
                   }`}
                   title={
-                    inWishlist ? 'Quitar de favoritos' : 'Agregar a favoritos'
+                    inWishlist ? "Quitar de favoritos" : "Agregar a favoritos"
                   }
                 >
                   {wishlistLoading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <Heart
-                      className={`h-5 w-5 ${
-                        inWishlist ? 'fill-current' : ''
-                      }`}
+                      className={`h-5 w-5 ${inWishlist ? "fill-current" : ""}`}
                     />
                   )}
                 </button>
               </div>
 
-              {/* Thumbnail Images */}
               {product.images && product.images.length > 1 && (
                 <div className="grid grid-cols-4 gap-3">
                   {product.images.map((img, idx) => (
@@ -368,8 +461,8 @@ export default function ProductoDetalle() {
                       onClick={() => setSelectedImageIndex(idx)}
                       className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-colors ${
                         idx === selectedImageIndex
-                          ? 'border-blue-600'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                          ? "border-blue-600"
+                          : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
                       }`}
                     >
                       <img
@@ -385,7 +478,6 @@ export default function ProductoDetalle() {
 
             {/* PRODUCT INFO */}
             <div className="space-y-6">
-              {/* Title */}
               <div>
                 <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white mb-2 text-balance">
                   {product.name}
@@ -397,7 +489,6 @@ export default function ProductoDetalle() {
                 )}
               </div>
 
-              {/* Rating */}
               {averageRating > 0 && (
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1">
@@ -406,20 +497,19 @@ export default function ProductoDetalle() {
                         key={star}
                         className={`h-5 w-5 ${
                           star <= Math.round(averageRating)
-                            ? 'fill-yellow-400 text-yellow-400'
-                            : 'text-gray-300'
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-gray-300"
                         }`}
                       />
                     ))}
                   </div>
                   <span className="text-sm text-gray-600 dark:text-gray-300">
-                    {averageRating.toFixed(1)} ({product.rating?.count || 0}{' '}
+                    {averageRating.toFixed(1)} ({product.rating?.count || 0}{" "}
                     reseñas)
                   </span>
                 </div>
               )}
 
-              {/* Price */}
               <div className="space-y-2">
                 <div className="flex items-baseline gap-3">
                   <span className="text-4xl font-bold text-gray-900 dark:text-white">
@@ -435,29 +525,28 @@ export default function ProductoDetalle() {
                 {product.comparePrice &&
                   product.comparePrice > product.price && (
                     <p className="text-sm text-green-600 font-semibold">
-                      Ahorras{' '}
+                      Ahorras{" "}
                       {formatPrice(product.comparePrice - product.price)}
                     </p>
                   )}
               </div>
 
-              {/* Availability */}
               <div
                 className={`p-4 rounded-xl ${
-                  availabilityStatus === 'available'
-                    ? 'bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800'
-                    : availabilityStatus === 'low_stock'
-                    ? 'bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-800'
-                    : 'bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800'
+                  availabilityStatus === "available"
+                    ? "bg-green-50 border border-green-200 dark:bg-green-900/20 dark:border-green-800"
+                    : availabilityStatus === "low_stock"
+                    ? "bg-orange-50 border border-orange-200 dark:bg-orange-900/20 dark:border-orange-800"
+                    : "bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800"
                 }`}
               >
                 <p
                   className={`font-semibold ${
-                    availabilityStatus === 'available'
-                      ? 'text-green-700 dark:text-green-400'
-                      : availabilityStatus === 'low_stock'
-                      ? 'text-orange-700 dark:text-orange-400'
-                      : 'text-red-700 dark:text-red-400'
+                    availabilityStatus === "available"
+                      ? "text-green-700 dark:text-green-400"
+                      : availabilityStatus === "low_stock"
+                      ? "text-orange-700 dark:text-orange-400"
+                      : "text-red-700 dark:text-red-400"
                   }`}
                 >
                   {availabilityText}
@@ -469,7 +558,6 @@ export default function ProductoDetalle() {
                 )}
               </div>
 
-              {/* Quantity Selector */}
               {isAvailable && !inCart && (
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
@@ -503,11 +591,10 @@ export default function ProductoDetalle() {
                     </div>
                   </div>
 
-                  {/* Add to Cart Button */}
                   <button
                     onClick={handleAddToCart}
                     disabled={cartLoading || !isAvailable}
-                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {cartLoading ? (
                       <>
@@ -524,7 +611,6 @@ export default function ProductoDetalle() {
                 </div>
               )}
 
-              {/* Already in Cart */}
               {inCart && (
                 <div className="space-y-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800">
                   <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 font-semibold">
@@ -539,7 +625,6 @@ export default function ProductoDetalle() {
                 </div>
               )}
 
-              {/* Features */}
               <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                 {isAvailable && (
                   <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
@@ -561,7 +646,6 @@ export default function ProductoDetalle() {
                 )}
               </div>
 
-              {/* Share */}
               <button className="w-full flex items-center justify-center gap-2 py-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors font-semibold">
                 <Share2 className="h-4 w-4" />
                 Compartir
@@ -570,24 +654,21 @@ export default function ProductoDetalle() {
           </div>
         </div>
 
-        {/* DESCRIPTION */}
         {product.description && (
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8 mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
               Descripción
             </h2>
             <div className="prose prose-sm dark:prose-invert text-gray-700 dark:text-gray-300 max-w-none">
-              <p>{product.description}</p>
+              <p className="whitespace-pre-wrap">{product.description}</p>
             </div>
           </div>
         )}
 
-        {/* SPECIFICATIONS */}
         {(product.attributes || product.brand || product.sku) && (
           <ProductSpecs product={product} className="mb-8" />
         )}
 
-        {/* REVIEWS */}
         {product.rating && (
           <ProductReviews
             product={product}
@@ -596,7 +677,6 @@ export default function ProductoDetalle() {
           />
         )}
 
-        {/* RELATED PRODUCTS */}
         {relatedProducts.length > 0 && (
           <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">

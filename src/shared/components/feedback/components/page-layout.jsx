@@ -1,7 +1,6 @@
-import Header from "./header"
-import Footer from "./footer"
-import { CartProvider } from "../hooks/use-cart.jsx"
-import { AuthProvider } from "../src/contexts/AuthContext.jsx"
+
+import { CartProvider } from "../../../../modules/cart/context/CartContext.jsx"
+import { AuthProvider } from "../../../../core/providers/AuthProvider.jsx"
 
 export function PageLayout({ children }) {
   return (

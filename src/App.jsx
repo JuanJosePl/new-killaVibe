@@ -1,43 +1,49 @@
 // src/App.jsx
-import { Suspense } from 'react';
-import AppRouter from './core/router/AppRouter';
+import { Suspense } from "react";
+import AppRouter from "./core/router/AppRouter";
 
 // ============================================================================
-// PROVIDERS GLOBALES
+// PROVIDERS GLOBALES - ✅ ORDEN CORRECTO
 // ============================================================================
-import { ThemeProvider } from './core/providers/ThemeProvider';
-import { CartProvider } from './modules/cart/context/CartContext';
-import { WishlistProvider } from './modules/wishlist/context/WishlistContext';
-import { SearchProvider } from './modules/search/context/SearchContext';
+import { ThemeProvider } from "./core/providers/ThemeProvider";
+import { CartProvider } from "./modules/cart/context/CartContext";
+import { WishlistProvider } from "./modules/wishlist/context/WishlistContext";
+import { SearchProvider } from "./modules/search/context/SearchContext";
+import { ProductsProvider } from "./modules/products/contexts/ProductsContext";
 
 // ============================================================================
 // TOAST NOTIFICATIONS
 // ============================================================================
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 /**
  * @component App
  * @description Componente raíz de la aplicación
+ *
+ * ✅ JERARQUÍA ÓPTIMA DE PROVIDERS
+ *
+ * main.jsx:
+ *   BrowserRouter → AuthProvider → App
+ *
+ * App.jsx (este archivo):
+ *   ThemeProvider → CartProvider → WishlistProvider → ProductsProvider → SearchProvider → AppRouter
+ *
+ * PRINCIPIOS:
+ * - Providers con side effects (fetch) primero
+ * - Providers con dependencias externas después
+ * - Providers de solo estado al final
+ * - AppRouter siempre al final
  * 
- * ESTRUCTURA DE PROVIDERS:
- * ThemeProvider        → Dark/Light mode
- *   └─> CartProvider   → Estado global del carrito
- *       └─> WishlistProvider → Estado global de wishlist
- *           └─> SearchProvider → Estado global de búsquedas
- *               └─> AppRouter → Sistema de rutas
- * 
- * IMPORTANTE:
- * - BrowserRouter está en main.jsx (no duplicar)
- * - AuthProvider está en main.jsx (envuelve todo)
- * - Providers en orden específico (ver documentación)
- * - ToastContainer para notificaciones globales
+ * ✅ MÓDULO ADMIN INTEGRADO:
+ * - Rutas admin en AppRouter
+ * - AdminLayout con sidebar
+ * - Guards AdminRoute protegiendo rutas
  */
 
 // ============================================================================
 // LOADING FALLBACK
 // ============================================================================
-
 function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -57,75 +63,98 @@ function LoadingFallback() {
 // ============================================================================
 // APP COMPONENT
 // ============================================================================
-
 function App() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       {/* 
-        ══════════════════════════════════════════════════════════════════
+        ══════════════════════════════════════════════════════════════════════
         CAPA 1: THEME PROVIDER
-        ══════════════════════════════════════════════════════════════════
-        Maneja dark/light mode
-        Debe estar arriba para aplicar tema antes que cualquier UI
+        ══════════════════════════════════════════════════════════════════════
+        - No tiene side effects
+        - Solo maneja estado local (dark/light)
       */}
       <ThemeProvider>
-        
         {/* 
-          ══════════════════════════════════════════════════════════════════
+          ══════════════════════════════════════════════════════════════════════
           CAPA 2: CART PROVIDER
-          ══════════════════════════════════════════════════════════════════
-          Estado global del carrito
-          API: /api/cart/*
+          ══════════════════════════════════════════════════════════════════════
+          ✅ PRIORIDAD ALTA: Fetch inicial si usuario autenticado
+          - API: /api/cart
+          - Inicializa una sola vez al montar
         */}
         <CartProvider>
-          
           {/* 
-            ══════════════════════════════════════════════════════════════════
+            ══════════════════════════════════════════════════════════════════════
             CAPA 3: WISHLIST PROVIDER
-            ══════════════════════════════════════════════════════════════════
-            Estado global de lista de deseos
-            API: /api/wishlist/*
+            ══════════════════════════════════════════════════════════════════════
+            ✅ PRIORIDAD ALTA: Fetch inicial si usuario autenticado
+            - API: /api/wishlist
+            - Inicializa una sola vez al montar
           */}
           <WishlistProvider>
-            
             {/* 
-              ══════════════════════════════════════════════════════════════════
-              CAPA 4: SEARCH PROVIDER
-              ══════════════════════════════════════════════════════════════════
-              Estado global de búsquedas
-              API: /api/search/*
+              ══════════════════════════════════════════════════════════════════════
+              CAPA 4: PRODUCTS PROVIDER
+              ══════════════════════════════════════════════════════════════════════
+              ✅ PRIORIDAD MEDIA: Cache de productos
+              - No fetch inicial
+              - Solo caché y helpers
             */}
-            <SearchProvider>
-              
+            <ProductsProvider>
               {/* 
-                ══════════════════════════════════════════════════════════════════
-                ROUTER PRINCIPAL
-                ══════════════════════════════════════════════════════════════════
-                Todas las rutas de la aplicación
+                ══════════════════════════════════════════════════════════════════════
+                CAPA 5: SEARCH PROVIDER
+                ══════════════════════════════════════════════════════════════════════
+                ✅ PRIORIDAD BAJA: Solo estado local
+                - No fetch inicial
+                - Solo maneja queries y resultados temporales
               */}
-              <AppRouter />
-              
-              {/* 
-                ══════════════════════════════════════════════════════════════════
-                TOAST NOTIFICATIONS
-                ══════════════════════════════════════════════════════════════════
-                Sistema de notificaciones global
-              */}
-              <ToastContainer
-                position="bottom-right"
-                autoClose={3000}
-                hideProgressBar={false}
-                newestOnTop
-                closeOnClick
-                rtl={false}
-                pauseOnFocusLoss
-                draggable
-                pauseOnHover
-                theme="colored"
-                className="z-[9999]"
-              />
-              
-            </SearchProvider>
+              <SearchProvider>
+                {/* 
+                  ══════════════════════════════════════════════════════════════════════
+                  ROUTER PRINCIPAL
+                  ══════════════════════════════════════════════════════════════════════
+                  Todas las rutas de la aplicación (públicas + admin)
+                  
+                  RUTAS PÚBLICAS:
+                  - / → Home
+                  - /productos → Lista productos
+                  - /productos/:slug → Detalle producto
+                  - /auth/login → Login
+                  - /auth/register → Register
+                  
+                  RUTAS ADMIN (protegidas con AdminRoute):
+                  - /admin → Dashboard
+                  - /admin/users → Gestión usuarios
+                  - /admin/products → Gestión productos
+                  - /admin/orders → Gestión órdenes
+                  - /admin/categories → Gestión categorías
+                  - /admin/analytics → Analytics con gráficos
+                */}
+                <AppRouter />
+
+                {/* 
+                  ══════════════════════════════════════════════════════════════════════
+                  TOAST NOTIFICATIONS
+                  ══════════════════════════════════════════════════════════════════════
+                  Sistema de notificaciones global
+                */}
+                <ToastContainer
+                  position="bottom-right"
+                  autoClose={3000}
+                  hideProgressBar={false}
+                  newestOnTop
+                  closeOnClick
+                  rtl={false}
+                  pauseOnFocusLoss
+                  draggable
+                  pauseOnHover
+                  theme="colored"
+                  className="z-[9999]"
+                  limit={3}
+                />
+              </SearchProvider>
+            </ProductsProvider>
           </WishlistProvider>
         </CartProvider>
       </ThemeProvider>

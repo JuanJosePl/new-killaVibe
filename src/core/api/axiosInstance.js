@@ -3,26 +3,12 @@
 import axios from 'axios';
 
 /**
- * @constant BASE_URL
- * @description URL base del backend
+ * ✅ CORRECCIÓN: Interceptor mejorado con mejor manejo de errores
  */
-const BASE_URL = import.meta.env.VITE_API_URL || 'https://ecommerce-1o8n.onrender.com/';
 
-/**
- * @constant AUTH_STORAGE_KEY
- * @description Clave para localStorage (debe coincidir con AuthProvider)
- */
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-vibeskilla.onrender.com/api';
 const AUTH_STORAGE_KEY = 'killavibes_auth';
 
-/**
- * @constant axiosInstance
- * @description Instancia de Axios configurada con:
- * - Base URL del backend
- * - Timeout de 10 segundos
- * - Headers comunes
- * - Interceptor de request (token)
- * - Interceptor de response (errores, refresh token)
- */
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
@@ -34,14 +20,13 @@ const axiosInstance = axios.create({
 /**
  * @function getStoredAuth
  * @description Obtiene datos de autenticación de localStorage
- * @returns {Object|null} { user, token, refreshToken } o null
  */
 const getStoredAuth = () => {
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     return stored ? JSON.parse(stored) : null;
   } catch (error) {
-    console.error('Error reading auth from localStorage:', error);
+    console.error('[axiosInstance] Error reading auth:', error);
     return null;
   }
 };
@@ -49,13 +34,12 @@ const getStoredAuth = () => {
 /**
  * @function saveStoredAuth
  * @description Guarda datos de autenticación en localStorage
- * @param {Object} authData - { user, token, refreshToken }
  */
 const saveStoredAuth = (authData) => {
   try {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authData));
   } catch (error) {
-    console.error('Error saving auth to localStorage:', error);
+    console.error('[axiosInstance] Error saving auth:', error);
   }
 };
 
@@ -67,13 +51,13 @@ const clearStoredAuth = () => {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY);
   } catch (error) {
-    console.error('Error clearing auth from localStorage:', error);
+    console.error('[axiosInstance] Error clearing auth:', error);
   }
 };
 
 /**
  * @interceptor request
- * @description Intercepta requests para agregar token automáticamente
+ * @description Agrega token automáticamente a cada request
  */
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -83,29 +67,40 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${authData.token}`;
     }
     
+    // ✅ Log solo en desarrollo
+    if (import.meta.env.DEV) {
+      console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`);
+    }
+    
     return config;
   },
   (error) => {
+    console.error('[axiosInstance] Request error:', error);
     return Promise.reject(error);
   }
 );
 
 /**
  * @interceptor response
- * @description Intercepta responses para:
- * - Manejar errores globalmente
- * - Refrescar token expirado automáticamente (401)
- * - Logout en caso de token inválido
+ * @description Maneja respuestas y errores globalmente
+ * ✅ CORRECCIÓN: Mejor estructura de errores
  */
 axiosInstance.interceptors.response.use(
   (response) => {
-    // Si la respuesta es exitosa, retornar data directamente
+    // ✅ Log solo en desarrollo
+    if (import.meta.env.DEV) {
+      console.log(`[API Response] ${response.config.url} → ${response.status}`);
+    }
+    
+    // Retornar data directamente
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
 
-    // Si el error es 401 (token expirado) y no es un retry
+    // ============================================================================
+    // MANEJO DE 401 - TOKEN EXPIRADO
+    // ============================================================================
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
@@ -115,6 +110,8 @@ axiosInstance.interceptors.response.use(
         if (!authData || !authData.refreshToken) {
           throw new Error('No refresh token available');
         }
+
+        console.log('[axiosInstance] Intentando refrescar token...');
 
         // Intentar refrescar el token
         const response = await axios.post(
@@ -132,13 +129,14 @@ axiosInstance.interceptors.response.use(
           };
           saveStoredAuth(updatedAuthData);
           
+          console.log('[axiosInstance] Token refrescado exitosamente');
+          
           // Reintentar request original con nuevo token
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return axiosInstance(originalRequest);
         }
       } catch (refreshError) {
-        // Si falla el refresh, logout
-        console.error('Token refresh failed:', refreshError);
+        console.error('[axiosInstance] Token refresh failed:', refreshError);
         clearStoredAuth();
         
         // Redirigir a login
@@ -150,14 +148,26 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    // Si es otro error, formatear y rechazar
+    // ============================================================================
+    // FORMATEAR ERROR - ✅ CORRECCIÓN
+    // ============================================================================
+    
+    // ✅ Mantener la estructura original de axios
     const formattedError = {
+      ...error,
       message: error.response?.data?.message || error.message || 'Error desconocido',
       statusCode: error.response?.status || 500,
-      errors: error.response?.data?.errors || [],
       success: false,
-      response: error.response
     };
+
+    // ✅ Log solo en desarrollo (excepto 401)
+    if (import.meta.env.DEV && error.response?.status !== 401) {
+      console.error(
+        `[API Error] ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`,
+        `→ ${error.response?.status || 'Network Error'}`,
+        error.response?.data?.message || error.message
+      );
+    }
 
     return Promise.reject(formattedError);
   }

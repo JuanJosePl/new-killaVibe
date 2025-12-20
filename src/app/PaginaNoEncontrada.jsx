@@ -1,8 +1,8 @@
 // not-found.jsx
 
 import { Home, Search, ArrowLeft } from "lucide-react"
-import { PageLayout } from "../components/page-layout"
-import { Button } from "../components/ui/button"
+import { PageLayout } from "../shared/components/feedback/components/page-layout"
+import { Button } from "../shared/components/ui/button"
 
 export default function NotFound() {
   return (

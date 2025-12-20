@@ -1,31 +1,35 @@
 // src/core/router/AppRouter.jsx
+
 import { Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 
-// Guards
+// ============================================================================
+// GUARDS
+// ============================================================================
 import { PrivateRoute } from '../guards/PrivateRoute';
 import { AdminRoute } from '../guards/AdminRoute';
 
-// Layout
-import Layout from '../../app/Layout';
+// ============================================================================
+// LAYOUTS
+// ============================================================================
+import Layout from '../../app/Layout'; // Layout público (Header + Footer)
+import AdminLayout from '../../modules/admin/layout/AdminLayout'; // Layout admin (Sidebar)
+
+// ============================================================================
+// HOOKS
+// ============================================================================
+import { useScrollToTop } from '../hooks/useScroll';
 
 /**
  * @component AppRouter
  * @description Router principal de la aplicación
  * 
- * ESTRUCTURA:
- * - Rutas públicas (sin auth)
- * - Rutas de autenticación
- * - Rutas privadas (requieren auth)
- * - Rutas de administrador
- * - 404
- * 
- * ARQUITECTURA:
- * BrowserRouter (en main.jsx)
- *   → App.jsx
- *     → AppRouter
- *       → Layout (Header + Outlet + Footer)
- *         → Páginas
+ * ✅ ESTRUCTURA COMPLETA:
+ * - Rutas públicas con Layout (Header + Footer)
+ * - Rutas de autenticación sin Layout
+ * - Rutas admin con AdminLayout (Sidebar) protegidas con AdminRoute
+ * - Lazy loading en todas las páginas
+ * - Scroll to top automático
  */
 
 // ============================================================================
@@ -47,163 +51,159 @@ const LoadingScreen = () => (
 );
 
 // ============================================================================
-// LAZY LOADED PAGES
+// LAZY LOADED PAGES - PÚBLICAS
 // ============================================================================
 
-// ────────────────────────────────────────────────────────────────────────────
-// PÃGINAS PÃBLICAS (src/app/)
-// ────────────────────────────────────────────────────────────────────────────
-
 const HomePage = lazy(() => import('../../app/PaginaPrincipal'));
-const { ContactPage } = lazy(() => import('../../modules/contact/pages/Contacto'));
 const AboutPage = lazy(() => import('../../app/sobre-nosotros/SobreNosotros'));
-// const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 const WarrantyPage = lazy(() => import('../../app/garantia/Garantia'));
 const ReturnsPage = lazy(() => import('../../app/devoluciones/Devoluciones'));
 const ShippingPage = lazy(() => import('../../app/envios/Envios'));
 const NotFoundPage = lazy(() => import('../../app/PaginaNoEncontrada'));
+const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
 
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO PRODUCTS (src/modules/products/pages/)
-// ────────────────────────────────────────────────────────────────────────────
-
+// Productos
 const ProductsListPage = lazy(() => import('../../modules/products/pages/ProductosLista'));
 const ProductDetailPage = lazy(() => import('../../modules/products/pages/detalle/ProductoDetalle'));
 
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO AUTH (src/modules/auth/pages/)
-// ────────────────────────────────────────────────────────────────────────────
+// Categorías
+const CategoriesPage = lazy(() => import('../../modules/categories/pages/CategoriesPage'));
 
+// Contacto
+const ContactPage = lazy(() => import('../../modules/contact/pages/Contacto'));
+
+// Auth
 const LoginPage = lazy(() => import('../../modules/auth/pages/Login'));
 const RegisterPage = lazy(() => import('../../modules/auth/pages/Register'));
 
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO CART & WISHLIST (src/modules/cart/pages/ y src/modules/wishlist/pages/)
-// ────────────────────────────────────────────────────────────────────────────
+// ============================================================================
+// LAZY LOADED PAGES - ADMIN
+// ============================================================================
 
-// Descomentar cuando existan estas páginas:
-// const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'));
-// const WishlistPage = lazy(() => import('../../modules/wishlist/pages/WishlistPage'));
-// const CheckoutPage = lazy(() => import('../../modules/checkout/pages/CheckoutPage'));
-
-// ────────────────────────────────────────────────────────────────────────────
-// MÃDULO ADMIN (src/modules/admin/pages/)
-// ────────────────────────────────────────────────────────────────────────────
-
-// Descomentar cuando existan estas páginas:
-// const AdminDashboard = lazy(() => import('../../modules/admin/pages/AdminDashboard'));
-// const AdminProducts = lazy(() => import('../../modules/admin/pages/products/AdminProducts'));
-// const AdminUsers = lazy(() => import('../../modules/admin/pages/users/AdminUsers'));
+const AdminDashboard = lazy(() => import('../../modules/admin/pages/Dashboard'));
+const UsersList = lazy(() => import('../../modules/admin/pages/Users/UsersList'));
+const UserDetails = lazy(() => import('../../modules/admin/pages/Users/UserDetails'));
+const ProductsList = lazy(() => import('../../modules/admin/pages/Products/ProductsList'));
+const ProductForm = lazy(() => import('../../modules/admin/pages/Products/ProductForm'));
+const CategoriesList = lazy(() => import('../../modules/admin/pages/Categories/CategoriesList'));
+const OrdersList = lazy(() => import('../../modules/admin/pages/Orders/OrdersList'));
+const OrderDetails = lazy(() => import('../../modules/admin/pages/Orders/OrderDetails'));
+const AnalyticsDashboard = lazy(() => import('../../modules/admin/pages/Analytics/AnalyticsDashboard'));
 
 // ============================================================================
 // APP ROUTER COMPONENT
 // ============================================================================
 
 export default function AppRouter() {
+  useScrollToTop();
+
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
         
         {/* ================================================================== */}
-        {/* RUTAS CON LAYOUT (Header + Footer)                                */}
+        {/* RUTAS PÚBLICAS CON LAYOUT (Header + Footer)                       */}
         {/* ================================================================== */}
         
         <Route element={<Layout />}>
-          
-          {/* ────────────────────────────────────────────────────────────── */}
-          {/* PÃGINAS PÃBLICAS                                                */}
-          {/* ────────────────────────────────────────────────────────────── */}
           
           {/* Página principal */}
           <Route index element={<HomePage />} />
           
           {/* Páginas informativas */}
-          <Route path="contacto" element={<ContactPage />} />
           <Route path="sobre-nosotros" element={<AboutPage />} />
-          {/* <Route path="ofertas" element={<OffersPage />} /> */}
           <Route path="garantia" element={<WarrantyPage />} />
           <Route path="devoluciones" element={<ReturnsPage />} />
           <Route path="envios" element={<ShippingPage />} />
+          <Route path="ofertas" element={<OffersPage />} />
+          <Route path="contacto" element={<ContactPage />} />
           
-          {/* ────────────────────────────────────────────────────────────── */}
-          {/* PRODUCTOS                                                       */}
-          {/* ────────────────────────────────────────────────────────────── */}
+          {/* Productos */}
+          <Route path="productos">
+            <Route index element={<ProductsListPage />} />
+            <Route path=":slug" element={<ProductDetailPage />} />
+            <Route path="categoria/:categorySlug" element={<CategoriesPage />} />
+          </Route>
           
-          <Route path="productos" element={<ProductsListPage />} />
-          <Route path="productos/:id" element={<ProductDetailPage />} />
-          
-          {/* ────────────────────────────────────────────────────────────── */}
-          {/* CART & WISHLIST (Rutas públicas pero mejores con auth)         */}
-          {/* ────────────────────────────────────────────────────────────── */}
-          
-          {/* Descomentar cuando existan las páginas:
-          <Route path="carrito" element={<CartPage />} />
-          <Route path="lista-deseos" element={<WishlistPage />} />
-          <Route path="checkout" element={
-            <PrivateRoute>
-              <CheckoutPage />
-            </PrivateRoute>
-          } />
-          */}
-          
-          {/* ────────────────────────────────────────────────────────────── */}
-          {/* RUTAS PRIVADAS (Requieren autenticación)                       */}
-          {/* ────────────────────────────────────────────────────────────── */}
-          
-          {/* Perfil de usuario */}
-          {/* Descomentar cuando existan:
-          <Route path="perfil" element={
-            <PrivateRoute>
-              <ProfilePage />
-            </PrivateRoute>
-          } />
-          
-          <Route path="mis-pedidos" element={
-            <PrivateRoute>
-              <OrdersPage />
-            </PrivateRoute>
-          } />
-          */}
+          {/* Categorías */}
+          <Route path="categorias" element={<CategoriesPage />} />
           
         </Route>
         
         {/* ================================================================== */}
-        {/* RUTAS SIN LAYOUT (Sin Header/Footer)                              */}
+        {/* RUTAS DE AUTENTICACIÓN (Sin Layout)                               */}
         {/* ================================================================== */}
-        
-        {/* ────────────────────────────────────────────────────────────── */}
-        {/* AUTENTICACIÃN                                                   */}
-        {/* ────────────────────────────────────────────────────────────── */}
         
         <Route path="auth/login" element={<LoginPage />} />
         <Route path="auth/register" element={<RegisterPage />} />
         
-        {/* ────────────────────────────────────────────────────────────── */}
-        {/* ADMIN PANEL (Sin layout público)                               */}
-        {/* ────────────────────────────────────────────────────────────── */}
+        {/* ================================================================== */}
+        {/* RUTAS ADMIN (Con AdminLayout + AdminRoute Guard)                  */}
+        {/* ================================================================== */}
         
-        {/* Descomentar cuando existan las páginas:
-        <Route path="admin" element={
-          <AdminRoute>
-            <AdminDashboard />
-          </AdminRoute>
-        } />
-        
-        <Route path="admin/productos" element={
-          <AdminRoute>
-            <AdminProducts />
-          </AdminRoute>
-        } />
-        
-        <Route path="admin/usuarios" element={
-          <AdminRoute allowedRoles={['admin']}>
-            <AdminUsers />
-          </AdminRoute>
-        } />
-        */}
+        <Route
+          path="admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          {/* Dashboard principal */}
+          <Route index element={<AdminDashboard />} />
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* USERS MANAGEMENT                                                */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="users">
+            <Route index element={<UsersList />} />
+            <Route path=":id" element={<UserDetails />} />
+          </Route>
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* PRODUCTS MANAGEMENT                                             */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="products">
+            <Route index element={<ProductsList />} />
+            <Route path="new" element={<ProductForm />} />
+            <Route path="edit/:id" element={<ProductForm />} />
+          </Route>
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* CATEGORIES MANAGEMENT                                           */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="categories" element={<CategoriesList />} />
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* ORDERS MANAGEMENT                                               */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="orders">
+            <Route index element={<OrdersList />} />
+            <Route path=":id" element={<OrderDetails />} />
+          </Route>
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* ANALYTICS                                                       */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="analytics" element={<AnalyticsDashboard />} />
+          
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* SETTINGS (Placeholder)                                          */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="settings" element={
+            <div className="p-6">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Configuración
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                Página en construcción
+              </p>
+            </div>
+          } />
+        </Route>
         
         {/* ================================================================== */}
-        {/* 404 - PÃGINA NO ENCONTRADA                                        */}
+        {/* 404 - PÁGINA NO ENCONTRADA                                         */}
         {/* ================================================================== */}
         
         <Route path="*" element={<NotFoundPage />} />
@@ -212,3 +212,46 @@ export default function AppRouter() {
     </Suspense>
   );
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * MAPA DE RUTAS COMPLETO
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * RUTAS PÚBLICAS (con Layout):
+ * ─────────────────────────────────────────────────────────────────────────
+ * GET  /                                    → HomePage
+ * GET  /productos                           → ProductsListPage
+ * GET  /productos/:slug                     → ProductDetailPage
+ * GET  /productos/categoria/:categorySlug   → CategoriesPage
+ * GET  /categorias                          → CategoriesPage
+ * GET  /contacto                            → ContactPage
+ * GET  /sobre-nosotros                      → AboutPage
+ * GET  /garantia                            → WarrantyPage
+ * GET  /devoluciones                        → ReturnsPage
+ * GET  /envios                              → ShippingPage
+ * GET  /ofertas                             → OffersPage
+ * 
+ * RUTAS AUTH (sin Layout):
+ * ─────────────────────────────────────────────────────────────────────────
+ * GET  /auth/login                          → LoginPage
+ * GET  /auth/register                       → RegisterPage
+ * 
+ * RUTAS ADMIN (con AdminLayout, protegidas):
+ * ─────────────────────────────────────────────────────────────────────────
+ * GET  /admin                               → AdminDashboard
+ * GET  /admin/users                         → UsersList
+ * GET  /admin/users/:id                     → UserDetails
+ * GET  /admin/products                      → ProductsList
+ * GET  /admin/products/new                  → ProductForm (crear)
+ * GET  /admin/products/edit/:id             → ProductForm (editar)
+ * GET  /admin/categories                    → CategoriesList
+ * GET  /admin/orders                        → OrdersList
+ * GET  /admin/orders/:id                    → OrderDetails
+ * GET  /admin/analytics                     → AnalyticsDashboard
+ * GET  /admin/settings                      → Settings (placeholder)
+ * 
+ * 404:
+ * ─────────────────────────────────────────────────────────────────────────
+ * GET  /*                                   → NotFoundPage
+ */

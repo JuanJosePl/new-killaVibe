@@ -1,6 +1,6 @@
 import { Zap, Users, Award, Heart, Truck, Shield } from "lucide-react"
-import { PageLayout } from "../../components/page-layout"
-import { Card, CardContent } from "../../components/ui/card"
+import { PageLayout } from "../../shared/components/feedback/components/page-layout"
+import { Card, CardContent } from "../../shared/components/ui/card"
 
 export default function AboutPage() {
   const values = [
