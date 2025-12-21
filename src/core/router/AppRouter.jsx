@@ -191,7 +191,7 @@ export default function AppRouter() {
             <Route index element={<ProductsList />} />
             <Route path="new" element={<ProductForm />} />
             <Route path="edit/:id" element={<ProductForm />} />
-          </Route>rouercart
+          </Route>
           
           {/* ────────────────────────────────────────────────────────────── */}
           {/* CATEGORIES MANAGEMENT                                           */}

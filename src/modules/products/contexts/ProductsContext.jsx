@@ -65,31 +65,35 @@ export const ProductsProvider = ({ children }) => {
   /**
    * Fetch productos con filtros
    */
-const fetchProducts = useCallback(async (filters = {}) => {
-  try {
-    setLoading(true);
-    const mergedFilters = { ...globalFilters, ...filters };
-    const response = await productsAPI.getProducts(mergedFilters);
+  const fetchProducts = useCallback(async (filters = {}) => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    if (response.success) {
-      setProducts(response.data || []);
-      setPagination(response.pagination || {});
-      
-      // ✅ ACTUALIZA EL CACHÉ USANDO LA FUNCIÓN DE ESTADO ANTERIOR
-      setProductCache((prevCache) => {
-        const newCache = new Map(prevCache);
+      const mergedFilters = { ...globalFilters, ...filters };
+      const response = await productsAPI.getProducts(mergedFilters);
+
+      if (response.success) {
+        setProducts(response.data || []);
+        setPagination(response.pagination || {});
+        
+        // Actualizar caché
         response.data?.forEach(product => {
-          newCache.set(product._id, product);
-        });
+          productCache.set(product._id, product);        });
         return newCache;
-      });
+        setProductCache(new Map(productCache));
+      } else {
+        setError(response.message || 'Error al cargar productos');
+        setProducts([]);
+      }
+    } catch (err) {
+      console.error('[ProductsContext] Error fetching products:', err);
+      setError(err.response?.data?.message || 'Error al cargar productos');
+      setProducts([]);
+    } finally {
+      setLoading(false);
     }
-    // ... resto del código
-  } finally {
-    setLoading(false);
-  }
-}, [globalFilters]); // <--- SOLO globalFilters aquí
-
+  }, [globalFilters, productCache]);
   /**
    * Fetch productos destacados
    */
@@ -346,7 +350,9 @@ const fetchProducts = useCallback(async (filters = {}) => {
    * Cargar productos destacados al montar
    */
 useEffect(() => {
-  fetchProducts();
+  if (products.length === 0) {
+    fetchProducts(); // Función que trae todos los productos de la API
+  }
 }, []);
 
   // ========== VALOR DEL CONTEXTO ==========
