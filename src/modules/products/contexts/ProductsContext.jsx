@@ -79,8 +79,8 @@ export const ProductsProvider = ({ children }) => {
         
         // Actualizar caché
         response.data?.forEach(product => {
-          productCache.set(product._id, product);        });
-        return newCache;
+          productCache.set(product._id, product);
+        });
         setProductCache(new Map(productCache));
       } else {
         setError(response.message || 'Error al cargar productos');
@@ -94,6 +94,7 @@ export const ProductsProvider = ({ children }) => {
       setLoading(false);
     }
   }, [globalFilters, productCache]);
+
   /**
    * Fetch productos destacados
    */
