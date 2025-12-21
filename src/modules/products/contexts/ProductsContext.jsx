@@ -65,35 +65,30 @@ export const ProductsProvider = ({ children }) => {
   /**
    * Fetch productos con filtros
    */
-  const fetchProducts = useCallback(async (filters = {}) => {
-    try {
-      setLoading(true);
-      setError(null);
+const fetchProducts = useCallback(async (filters = {}) => {
+  try {
+    setLoading(true);
+    const mergedFilters = { ...globalFilters, ...filters };
+    const response = await productsAPI.getProducts(mergedFilters);
 
-      const mergedFilters = { ...globalFilters, ...filters };
-      const response = await productsAPI.getProducts(mergedFilters);
-
-      if (response.success) {
-        setProducts(response.data || []);
-        setPagination(response.pagination || {});
-        
-        // Actualizar caché
+    if (response.success) {
+      setProducts(response.data || []);
+      setPagination(response.pagination || {});
+      
+      // ✅ ACTUALIZA EL CACHÉ USANDO LA FUNCIÓN DE ESTADO ANTERIOR
+      setProductCache((prevCache) => {
+        const newCache = new Map(prevCache);
         response.data?.forEach(product => {
-          productCache.set(product._id, product);
+          newCache.set(product._id, product);
         });
-        setProductCache(new Map(productCache));
-      } else {
-        setError(response.message || 'Error al cargar productos');
-        setProducts([]);
-      }
-    } catch (err) {
-      console.error('[ProductsContext] Error fetching products:', err);
-      setError(err.response?.data?.message || 'Error al cargar productos');
-      setProducts([]);
-    } finally {
-      setLoading(false);
+        return newCache;
+      });
     }
-  }, [globalFilters, productCache]);
+    // ... resto del código
+  } finally {
+    setLoading(false);
+  }
+}, [globalFilters]); // <--- SOLO globalFilters aquí
 
   /**
    * Fetch productos destacados
@@ -351,9 +346,7 @@ export const ProductsProvider = ({ children }) => {
    * Cargar productos destacados al montar
    */
 useEffect(() => {
-  if (products.length === 0) {
-    fetchProducts(); // Función que trae todos los productos de la API
-  }
+  fetchProducts();
 }, []);
 
   // ========== VALOR DEL CONTEXTO ==========

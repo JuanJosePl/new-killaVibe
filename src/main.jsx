@@ -5,10 +5,11 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import './shared/styles/index.css';
 
-// ============================================================================
-// AUTH PROVIDER
-// ============================================================================
+// IMPORTACIONES NECESARIAS
 import { AuthProvider } from './core/providers/AuthProvider';
+import { CartProvider } from './modules/cart/context/CartContext.jsx';
+import { ProductsProvider } from './modules/products/contexts/ProductsContext.jsx'; // 
+import { WishlistProvider } from './modules/wishlist/context/WishlistContext.jsx'; //
 
 /**
  * @file main.jsx
@@ -33,39 +34,19 @@ import { AuthProvider } from './core/providers/AuthProvider';
  * - Otros providers están en App.jsx
  */
 
+// src/main.jsx
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {/* 
-      ══════════════════════════════════════════════════════════════════════
-      BROWSER ROUTER
-      ══════════════════════════════════════════════════════════════════════
-      Habilita React Router DOM
-      ⚠️ Solo debe existir UNA instancia en toda la app
-    */}
-    <BrowserRouter future={{
-    v7_startTransition: true,
-    v7_relativeSplatPath: true,
-  }}>
-      
-      {/* 
-        ══════════════════════════════════════════════════════════════════════
-        AUTH PROVIDER
-        ══════════════════════════════════════════════════════════════════════
-        Proporciona contexto de autenticación a toda la app
-        Debe estar aquí para envolver TODO (incluyendo router)
-      */}
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
-        
-        {/* 
-          ══════════════════════════════════════════════════════════════════════
-          APP COMPONENT
-          ══════════════════════════════════════════════════════════════════════
-          Contiene todos los demás providers y el router
-        */}
-        <App />
-        
+        <ProductsProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <App />
+            </CartProvider>
+          </WishlistProvider>
+        </ProductsProvider>
       </AuthProvider>
-      
     </BrowserRouter>
   </StrictMode>
 );
