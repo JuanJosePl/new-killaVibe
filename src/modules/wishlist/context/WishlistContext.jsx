@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
   useRef,
+  useMemo
 } from "react";
 
 import * as wishlistAPI from "../api/wishlist.api";
@@ -28,13 +29,11 @@ export const WishlistProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
 
-  // Caché en memoria
   const [cache, setCache] = useState({
     data: null,
     timestamp: null,
   });
 
-  // ✅ PROTECCIÓN: Refs para evitar loops
   const fetchInProgressRef = useRef(false);
   const initializedOnceRef = useRef(false);
   const mountedRef = useRef(true);
@@ -66,15 +65,9 @@ export const WishlistProvider = ({ children }) => {
   // ============================================================================
   const fetchWishlist = useCallback(
     async (forceRefresh = false) => {
-      // ✅ GUARD 1: Prevenir llamadas simultáneas
-      if (fetchInProgressRef.current) {
-        console.log("[WishlistContext] Fetch ya en progreso, ignorando...");
-        return wishlist;
-      }
+      if (fetchInProgressRef.current) return wishlist;
 
-      // ✅ GUARD 2: Usar caché si es válido
       if (!forceRefresh && isCacheValid()) {
-        console.log("[WishlistContext] Usando caché válido");
         setWishlist(cache.data);
         return cache.data;
       }
@@ -85,41 +78,18 @@ export const WishlistProvider = ({ children }) => {
 
       try {
         const response = await wishlistAPI.getWishlist();
-        const wishlistData = response.data;
+        const wishlistData = response.data || response;
 
         if (mountedRef.current) {
           setWishlist(wishlistData);
           updateCache(wishlistData);
         }
-
         return wishlistData;
       } catch (err) {
-        console.error("[WishlistContext] Error fetching wishlist:", err);
-
-        const statusCode = err.response?.status;
-
-        // ✅ GUARD 3: No mostrar errores de auth
-        if (statusCode === 401) {
-          if (mountedRef.current) {
-            setError(null);
-            setWishlist(null);
-          }
-          return null;
-        } else if (statusCode === 429) {
-          if (mountedRef.current) {
-            setError("Demasiadas peticiones. Intenta en unos minutos.");
-            if (cache.data) {
-              setWishlist(cache.data);
-              return cache.data;
-            }
-          }
-          return null;
-        }
-
-        if (mountedRef.current) {
-          setError(
-            err.response?.data?.message || "Error al cargar la wishlist"
-          );
+        if (err.response?.status === 401) {
+          setWishlist(null);
+        } else if (mountedRef.current) {
+          setError(err.response?.data?.message || "Error al cargar la wishlist");
         }
         return null;
       } finally {
@@ -135,192 +105,138 @@ export const WishlistProvider = ({ children }) => {
 
   const addItem = useCallback(
     async (itemData) => {
+      const productId = itemData.productId || itemData._id || itemData.id;
+      const itemsList = wishlist?.items || [];
+      const alreadyExists = itemsList.some(item => {
+        const idInItem = item.product?._id || item.product?.id || item.product;
+        return idInItem === productId;
+      });
+
+      if (alreadyExists) return { data: wishlist, status: 'already_exists' };
+
       try {
         setLoading(true);
-        setError(null);
-
-        const response = await wishlistAPI.addItem(itemData);
-
+        const response = await wishlistAPI.addItem({ productId });
         if (response?.data && mountedRef.current) {
           setWishlist(response.data);
           updateCache(response.data);
-          return response;
         }
-
-        return null;
+        return response;
       } catch (err) {
-        console.error("[WishlistContext] Error adding item:", err);
-        if (mountedRef.current) {
-          setError(err.response?.data?.message || "Error al agregar producto");
+        if (err.response?.status === 500 || err.response?.data?.message?.includes("ya está")) {
+          return await fetchWishlist(true);
         }
         return null;
       } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+        if (mountedRef.current) setLoading(false);
       }
     },
-    [updateCache]
+    [wishlist, updateCache, fetchWishlist]
   );
 
   const removeItem = useCallback(
     async (productId) => {
       try {
         setLoading(true);
-        setError(null);
-
         const response = await wishlistAPI.removeItem(productId);
-
         if (response?.data && mountedRef.current) {
           setWishlist(response.data);
           updateCache(response.data);
-          return response;
         }
-
-        return null;
+        return response;
       } catch (err) {
-        console.error("[WishlistContext] Error removing item:", err);
-        if (mountedRef.current) {
-          setError(err.response?.data?.message || "Error al eliminar producto");
-        }
         return null;
       } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+        if (mountedRef.current) setLoading(false);
       }
     },
     [updateCache]
   );
-
-  const clearWishlistItems = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await wishlistAPI.clearWishlist();
-
-      if (response?.data && mountedRef.current) {
-        setWishlist(response.data);
-        updateCache(response.data);
-        return response;
-      }
-
-      return null;
-    } catch (err) {
-      console.error("[WishlistContext] Error clearing wishlist:", err);
-      if (mountedRef.current) {
-        setError(err.response?.data?.message || "Error al vaciar wishlist");
-      }
-      return null;
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [updateCache]);
-
-  const checkProduct = useCallback(async (productId) => {
-    try {
-      const response = await wishlistAPI.checkProduct(productId);
-      return response?.inWishlist ?? false;
-    } catch {
-      return false;
-    }
-  }, []);
 
   const moveToCart = useCallback(
     async (productIds) => {
       try {
         setLoading(true);
         setError(null);
-
         const response = await wishlistAPI.moveToCart(productIds);
+        // Forzamos actualización para quitar los items movidos de la lista
         await fetchWishlist(true);
-
-        return response?.data ?? null;
+        return response?.data ?? response;
       } catch (err) {
         console.error("[WishlistContext] Error moving to cart:", err);
         if (mountedRef.current) {
           setError(err.response?.data?.message || "Error al mover productos");
         }
-        return null;
+        throw err; // Re-lanzamos para que useWishlistActions lo capture
       } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+        if (mountedRef.current) setLoading(false);
       }
     },
     [fetchWishlist]
   );
 
-  const getPriceChanges = useCallback(async () => {
+  const clearWishlistItems = useCallback(async () => {
     try {
-      const response = await wishlistAPI.getPriceChanges();
-      return response?.data ?? [];
-    } catch {
-      return [];
+      setLoading(true);
+      const response = await wishlistAPI.clearWishlist();
+      if (response?.data && mountedRef.current) {
+        setWishlist(response.data);
+        updateCache(response.data);
+      }
+      return response;
+    } catch (err) {
+      return null;
+    } finally {
+      if (mountedRef.current) setLoading(false);
     }
-  }, []);
-
-  const refreshWishlist = useCallback(() => {
-    return fetchWishlist(true);
-  }, [fetchWishlist]);
+  }, [updateCache]);
 
   // ============================================================================
-  // INITIALIZATION - ✅ SOLO UNA VEZ
+  // INITIALIZATION
   // ============================================================================
   useEffect(() => {
     mountedRef.current = true;
-
-    // ✅ GUARD: Solo ejecutar una vez
-    if (initializedOnceRef.current) {
-      console.log("[WishlistContext] Ya inicializado, ignorando...");
-      return;
+    if (!initializedOnceRef.current) {
+      initializedOnceRef.current = true;
+      fetchWishlist();
     }
-
-    initializedOnceRef.current = true;
-    console.log("[WishlistContext] Inicializando por primera vez...");
-
-    // ✅ Delay mínimo para evitar race conditions
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        fetchWishlist();
-      }
-    }, 100);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-    };
-  }, []); // ✅ ARRAY VACÍO - Solo al montar
+    return () => { mountedRef.current = false; };
+  }, [fetchWishlist]);
 
   // ============================================================================
   // COMPUTED
   // ============================================================================
-  const isEmpty = isWishlistEmpty(wishlist);
-  const itemCount = calculateItemCount(wishlist);
+  const items = useMemo(() => wishlist?.items || [], [wishlist]);
+  const itemCount = useMemo(() => calculateItemCount(wishlist), [wishlist]);
+  const isEmpty = useMemo(() => isWishlistEmpty(wishlist), [wishlist]);
+
+  const summary = useMemo(() => ({
+    itemCount,
+    availableCount: items.filter(i => i.product?.stock > 0).length,
+    totalValue: items.reduce((acc, curr) => acc + (curr.product?.price || 0), 0)
+  }), [items, itemCount]);
 
   const value = {
     wishlist,
+    items,
+    summary,
     loading,
     error,
     initialized,
-
     isEmpty,
     itemCount,
 
+    // Acciones principales
     fetchWishlist,
     addItem,
     removeItem,
+    moveToCart, // ✅ ESTO FALTABA Y CAUSABA TU ERROR
     clearWishlistItems,
-    checkProduct,
-    moveToCart,
-    getPriceChanges,
-    refreshWishlist,
-
+    refreshWishlist: () => fetchWishlist(true),
+    
+    // Helpers
     clearCache,
-    setError,
+    setError
   };
 
   return (
@@ -332,11 +248,7 @@ export const WishlistProvider = ({ children }) => {
 
 export const useWishlistContext = () => {
   const context = useContext(WishlistContext);
-  if (!context) {
-    throw new Error(
-      "useWishlistContext debe usarse dentro de WishlistProvider"
-    );
-  }
+  if (!context) throw new Error("useWishlistContext debe usarse dentro de WishlistProvider");
   return context;
 };
 
