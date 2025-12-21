@@ -19,6 +19,7 @@ import AdminLayout from '../../modules/admin/layout/AdminLayout'; // Layout admi
 // HOOKS
 // ============================================================================
 import { useScrollToTop } from '../hooks/useScroll';
+import WishlistPage from '../../modules/wishlist/pages/WishlistPage';
 
 /**
  * @component AppRouter
@@ -70,6 +71,10 @@ const ProductDetailPage = lazy(() => import('../../modules/products/pages/detall
 const CategoriesPage = lazy(() => import('../../modules/categories/pages/CategoriesPage'));
 
 const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/CategoryDetailPage'));
+
+const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'))
+
+const WishListPage = lazy (() => import('../../modules/wishlist/pages/WishlistPage'))
 
 // ────────────────────────────────────────────────────────────────────────────
 // MÓDULO CONTACT (src/modules/contact/pages/)
@@ -138,6 +143,12 @@ export default function AppRouter() {
           {/* Categorías */}
           <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
           <Route path="categorias" element={<CategoriesPage />} />
+
+          {/* Carrito */}
+          <Route path="carrito" element={<CartPage />} />
+
+          {/* WishList */}
+          <Route path="lista-deseos" element={<WishlistPage/>} />
 
         </Route>
         
