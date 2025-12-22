@@ -1,7 +1,11 @@
 // CartPage.jsx
-import { useCart, useCartActions, CartItem, CartSummary } from './modules/cart';
+import  CartSummary  from '../components/CartSummary';
+import  CartItem  from '../components/CartItem';
+import  useCartActions  from '../hooks/useCartActions';
+import  useCart  from '../hooks/useCart';
+import EmptyCart from '../components/EmptyCart';
 
-function CartPage() {
+ export default function CartPage() {
   const { cart, loading, summary, items, isEmpty } = useCart();
   const { updateQuantity, removeFromCart, clearCart } = useCartActions(
     (msg) => toast.success(msg),
@@ -9,6 +13,8 @@ function CartPage() {
   );
 
   if (isEmpty) return <EmptyCart />;
+
+  
 
   return (
     <div className="grid grid-cols-3 gap-6">

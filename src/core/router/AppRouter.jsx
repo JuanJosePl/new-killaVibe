@@ -71,6 +71,13 @@ const CategoriesPage = lazy(() => import('../../modules/categories/pages/Categor
 
 const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/CategoryDetailPage'));
 
+// WishList
+const WishlistPage = lazy(() => import('../../modules/wishlist/pages/WishlistPage'));
+
+// Carrito
+const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'));
+// import CartPage from '../../modules/cart/pages/CartPage'
+
 // ────────────────────────────────────────────────────────────────────────────
 // MÓDULO CONTACT (src/modules/contact/pages/)
 // ────────────────────────────────────────────────────────────────────────────
@@ -138,6 +145,16 @@ export default function AppRouter() {
           {/* Categorías */}
           <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
           <Route path="categorias" element={<CategoriesPage />} />
+          
+          
+          {/* WishList */}
+          <Route path="lista-deseos" element={<WishlistPage />} />
+          
+          {/* Carrito */}
+          <Route path="carrito" element={<CartPage />} />
+          {/* <Route path="carrito" element={<div className="p-20">Prueba Carrito</div>} /> */}
+
+
 
         </Route>
         

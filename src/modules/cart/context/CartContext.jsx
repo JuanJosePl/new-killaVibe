@@ -74,12 +74,6 @@ export const CartProvider = ({ children }) => {
   // ============================================================================
   const fetchCart = useCallback(
     async (forceRefresh = false) => {
-      // ✅ GUARD 1: No fetch sin auth
-      if (!token) {
-        setCart(null);
-        setInitialized(true);
-        return null;
-      }
 
       // ✅ GUARD 2: Prevenir fetch simultáneo
       if (fetchInProgressRef.current) {
@@ -132,7 +126,7 @@ export const CartProvider = ({ children }) => {
         fetchInProgressRef.current = false;
       }
     },
-    [token, isCacheValid, updateCache, cache.data, cart]
+    [ isCacheValid, updateCache ]
   );
 
   const addItem = useCallback(
@@ -392,49 +386,27 @@ export const CartProvider = ({ children }) => {
   // ============================================================================
   // INITIALIZATION - ✅ SOLO UNA VEZ
   // ============================================================================
+
   useEffect(() => {
-    mountedRef.current = true;
+  mountedRef.current = true;
 
-    // ✅ GUARD: Solo inicializar una vez
-    if (initializedOnceRef.current) {
-      console.log("[CartContext] Ya inicializado, ignorando...");
-      return;
-    }
+  if (isAuthenticated) {
+    // CASO A: El usuario acaba de loguearse o la app carga logueada
+    console.log("[CartContext] Usuario autenticado, cargando carrito...");
+    fetchCart(false); 
+  } else {
+    // CASO B: No hay usuario (Logout o carga inicial anónima)
+    setCart(null);
+    setInitialized(true);
+    clearCache();
+    // Reseteamos la guarda para que si alguien se loguea, permita un nuevo fetch
+    initializedOnceRef.current = false;
+  }
 
-    initializedOnceRef.current = true;
-
-    if (!isAuthenticated) {
-      setCart(null);
-      setInitialized(true);
-      clearCache();
-      return;
-    }
-
-    console.log("[CartContext] Inicializando por primera vez...");
-
-    // ✅ Delay mínimo
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        fetchCart(false);
-      }
-    }, 150);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-    };
-  }, []); // ✅ ARRAY VACÍO
-
-  // ============================================================================
-  // REACT TO AUTH CHANGES - ✅ SIN DEPENDENCIAS CIRCULARES
-  // ============================================================================
-  useEffect(() => {
-    // Solo limpiar si cambia auth después de inicialización
-    if (initializedOnceRef.current && !isAuthenticated) {
-      setCart(null);
-      clearCache();
-    }
-  }, [isAuthenticated]); // ✅ Solo auth
+  return () => {
+    mountedRef.current = false;
+  };
+}, [isAuthenticated]); // 👈 El único disparador real
 
   // ============================================================================
   // VALUE
