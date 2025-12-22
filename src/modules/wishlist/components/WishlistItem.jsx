@@ -55,7 +55,7 @@ const WishlistItem = ({
         <div className="w-full sm:w-48 h-48 flex-shrink-0 bg-gray-100">
           {product.images && product.images.length > 0 ? (
             <img
-              src={product.images[0]}
+              src={product.images[0].url}
               alt={product.name}
               className="w-full h-full object-cover"
             />

@@ -1,5 +1,5 @@
 // src/modules/wishlist/hooks/useWishlist.js
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useWishlistContext } from '../context/WishlistContext';
 import {
   getAvailableItems,
@@ -15,10 +15,6 @@ import {
 /**
  * @hook useWishlist
  * @description Hook principal para acceder a wishlist con datos calculados
- * 
- * ✅ AGREGADO: isInWishlist(productId) para verificar si producto está en wishlist
- * 
- * @returns {Object} Wishlist state y helpers
  */
 const useWishlist = () => {
   const {
@@ -32,99 +28,52 @@ const useWishlist = () => {
     refreshWishlist,
     clearCache,
     setError,
+    addItem,      // Asegúrate de exportar estas acciones desde el context
+    removeItem,
   } = useWishlistContext();
 
   /**
-   * Items disponibles (en stock, publicados)
-   */
-  const availableItems = useMemo(() => {
-    return getAvailableItems(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items no disponibles
-   */
-  const unavailableItems = useMemo(() => {
-    return getUnavailableItems(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items con cambio de precio
-   */
-  const itemsWithPriceChange = useMemo(() => {
-    return getItemsWithPriceChange(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items con precio reducido
-   */
-  const itemsWithPriceDrop = useMemo(() => {
-    return getItemsWithPriceDrop(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items ordenados por fecha (más reciente primero)
-   */
-  const itemsByDate = useMemo(() => {
-    return sortByDateAdded(wishlist?.items || []);
-  }, [wishlist]);
-
-  /**
-   * Items ordenados por mayor descuento
-   */
-  const itemsByPriceDrop = useMemo(() => {
-    return sortByPriceDrop(wishlist?.items || []);
-  }, [wishlist]);
-
-  /**
-   * Resumen completo de la wishlist
-   */
-  const summary = useMemo(() => {
-    return generateWishlistSummary(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Todos los items (sin filtros)
+   * Todos los items (array base)
+   * Extraemos .items para que los helpers trabajen sobre datos limpios
    */
   const items = useMemo(() => {
     return wishlist?.items || [];
   }, [wishlist]);
 
   /**
-   * Tiene items con cambios de precio?
+   * Items filtrados y procesados
    */
-  const hasPriceChanges = useMemo(() => {
-    return itemsWithPriceChange.length > 0;
-  }, [itemsWithPriceChange]);
+  const availableItems = useMemo(() => getAvailableItems(wishlist), [wishlist]);
+  const unavailableItems = useMemo(() => getUnavailableItems(wishlist), [wishlist]);
+  const itemsWithPriceChange = useMemo(() => getItemsWithPriceChange(wishlist), [wishlist]);
+  const itemsWithPriceDrop = useMemo(() => getItemsWithPriceDrop(wishlist), [wishlist]);
 
   /**
-   * Tiene items con descuentos?
+   * Ordenamiento
    */
-  const hasPriceDrops = useMemo(() => {
-    return itemsWithPriceDrop.length > 0;
-  }, [itemsWithPriceDrop]);
+  const itemsByDate = useMemo(() => sortByDateAdded(items), [items]);
+  const itemsByPriceDrop = useMemo(() => sortByPriceDrop(items), [items]);
 
   /**
-   * Tiene items no disponibles?
+   * Resumen y Flags
    */
-  const hasUnavailableItems = useMemo(() => {
-    return unavailableItems.length > 0;
-  }, [unavailableItems]);
+  const summary = useMemo(() => generateWishlistSummary(wishlist), [wishlist]);
+  const hasPriceChanges = itemsWithPriceChange.length > 0;
+  const hasPriceDrops = itemsWithPriceDrop.length > 0;
+  const hasUnavailableItems = unavailableItems.length > 0;
 
   // ============================================================================
-  // ✅ NUEVO: VERIFICAR SI PRODUCTO ESTÃ EN WISHLIST
+  // ✅ CORRECCIÓN: isInWishlist como CALLBACK
   // ============================================================================
-
+  
   /**
-   * Verifica si un producto está en la wishlist
-   * @param {string} productId - ID del producto
-   * @returns {boolean}
+   * Verifica si un producto está en la wishlist.
+   * Usamos useCallback en lugar de useMemo devolviendo una función para 
+   * evitar regeneraciones innecesarias de la lógica de búsqueda.
    */
-  const isInWishlist = useMemo(() => {
-    return (productId) => {
-      if (!productId || !wishlist) return false;
-      return isProductInWishlist(wishlist, productId);
-    };
+  const isInWishlist = useCallback((productId) => {
+    if (!productId || !wishlist) return false;
+    return isProductInWishlist(wishlist, productId);
   }, [wishlist]);
 
   return {
@@ -149,22 +98,24 @@ const useWishlist = () => {
     hasPriceDrops,
     hasUnavailableItems,
 
-    // Counts
-    itemCount,
-    availableCount: availableItems.length,
-    unavailableCount: unavailableItems.length,
-    priceChangesCount: itemsWithPriceChange.length,
-    priceDropsCount: itemsWithPriceDrop.length,
+    // Conteos (Seguros)
+    itemCount: itemCount || 0,
+    availableCount: availableItems?.length || 0,
+    unavailableCount: unavailableItems?.length || 0,
+    priceChangesCount: itemsWithPriceChange?.length || 0,
+    priceDropsCount: itemsWithPriceDrop?.length || 0,
 
     // Resumen
     summary,
 
-    // ✅ AGREGADO: Verificador de wishlist
+    // ✅ Verificador corregido
     isInWishlist,
 
-    // Acciones
+    // Acciones (Pasamos las del contexto para tener todo en un solo hook)
     fetchWishlist,
     refreshWishlist,
+    addItem,
+    removeItem,
     clearCache,
     setError,
   };

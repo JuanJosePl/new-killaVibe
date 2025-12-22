@@ -71,6 +71,13 @@ const CategoriesPage = lazy(() => import('../../modules/categories/pages/Categor
 
 const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/CategoryDetailPage'));
 
+// WishList
+const WishlistPage = lazy(() => import('../../modules/wishlist/pages/WishlistPage'));
+
+// Carrito
+const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'));
+// import CartPage from '../../modules/cart/pages/CartPage'
+
 // ────────────────────────────────────────────────────────────────────────────
 // MÓDULO CONTACT (src/modules/contact/pages/)
 // ────────────────────────────────────────────────────────────────────────────
@@ -81,8 +88,6 @@ const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
 // ────────────────────────────────────────────────────────────────────────────
 // MÓDULO AUTH (src/modules/auth/pages/)
 // ────────────────────────────────────────────────────────────────────────────
-// Contacto
-const ContactPage = lazy(() => import('../../modules/contact/pages/Contacto'));
 
 // Auth
 const LoginPage = lazy(() => import('../../modules/auth/pages/Login'));
@@ -135,12 +140,22 @@ export default function AppRouter() {
             <Route index element={<ProductsListPage />} />
             <Route path=":slug" element={<ProductDetailPage />} />
             
-            <Route path="categoria/:categorySlug" element={<CategoriesPage />} />
           </Route>
           
           {/* Categorías */}
+          <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
           <Route path="categorias" element={<CategoriesPage />} />
           
+          
+          {/* WishList */}
+          <Route path="lista-deseos" element={<WishlistPage />} />
+          
+          {/* Carrito */}
+          <Route path="carrito" element={<CartPage />} />
+          {/* <Route path="carrito" element={<div className="p-20">Prueba Carrito</div>} /> */}
+
+
+
         </Route>
         
         {/* ================================================================== */}
@@ -169,9 +184,7 @@ export default function AppRouter() {
           {/* USERS MANAGEMENT                                                */}
           {/* ────────────────────────────────────────────────────────────── */}
           
-          {/* Categorías */}
-          <Route path="categorias/:categorySlug" element={<CategoryDetailPage />} />
-          <Route path="categorias" element={<CategoriesPage />} />
+
           <Route path="users">
             <Route index element={<UsersList />} />
             <Route path=":id" element={<UserDetails />} />

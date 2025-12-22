@@ -31,6 +31,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "formik": "^2.4.9",
+    "framer-motion": "^12.23.26",
     "killavibes-ecommerce": "file:",
     "lucide-react": "^0.454.0",
     "next": "^15.5.9",
