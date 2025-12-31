@@ -42,10 +42,6 @@ createRoot(document.getElementById('root')).render(
       ══════════════════════════════════════════════════════════════════════
       Habilita React Router DOM
       ⚠️ Solo debe existir UNA instancia en toda la app
-<<<<<<< Updated upstream
-    */}
-    <BrowserRouter>
-=======
       */}
     <BrowserRouter future={{
       v7_startTransition: true,
@@ -55,7 +51,7 @@ createRoot(document.getElementById('root')).render(
       v7_partialHydration: true,
       v7_skipActionErrorRevalidation: true,
     }}>
->>>>>>> Stashed changes
+
       
       {/* 
         ══════════════════════════════════════════════════════════════════════

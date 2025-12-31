@@ -125,17 +125,27 @@ export default function ProductoDetalle() {
         setLoading(true);
         setError(null);
 
+        // console.log('[ProductoDetalle] Fetching product with slug:', slug);
         console.log("[ProductoDetalle] Fetching product:", slug);
 
         const response = await productsAPI.getProductBySlug(slug, {
           signal: abortController.signal,
         });
 
+        // console.log('[ProductoDetalle] API Response:', response);
+
+        // ✅ Validación de respuesta
+        if (!response) {
+          throw new Error('No se recibió respuesta del servidor');
+        }
         if (!mountedRef.current) return;
 
         if (response?.success && response.data) {
           const prod = response.data;
 
+          // console.log('[ProductoDetalle] Product data:', prod);
+
+          // Validar estructura básica
           if (!prod._id || !prod.name) {
             throw new Error("Datos de producto incompletos");
           }
