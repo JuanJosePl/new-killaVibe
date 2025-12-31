@@ -670,11 +670,13 @@ export default function ProductoDetalle() {
         )}
 
         {product.rating && (
+          <div className="w-full mt-12"> {/* Contenedor de ancho completo */}
           <ProductReviews
             product={product}
             reviews={product.reviews || []}
             className="mb-8"
           />
+          </div>
         )}
 
         {relatedProducts.length > 0 && (

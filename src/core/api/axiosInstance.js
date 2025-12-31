@@ -169,8 +169,11 @@ axiosInstance.interceptors.response.use(
       );
     }
 
-    return Promise.reject(formattedError);
-  }
-);
+    return Promise.reject({
+  message: error.response?.data?.message || error.message || 'Error desconocido',
+  statusCode: error.response?.status || 500,
+  success: false,
+  data: error.response?.data || null,
+})});
 
 export default axiosInstance;

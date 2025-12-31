@@ -34,15 +34,23 @@ export function ThemeProvider({ children }) {
     return currentTheme;
   }, [getSystemTheme]);
 
-  // ✅ Función para aplicar el tema al DOM
+// ✅ Agregar transiciones suaves
   const applyTheme = useCallback((themeToApply) => {
     const root = window.document.documentElement;
+  
+    // ✅ Evitar "flash" al cambiar tema
+    root.classList.add('theme-transitioning');
     
     // Remover clases anteriores
     root.classList.remove(THEMES.LIGHT, THEMES.DARK);
     
     // Agregar la nueva clase
     root.classList.add(themeToApply);
+
+    // ✅ Remover clase de transición después de 200ms
+    setTimeout(() => {
+      root.classList.remove('theme-transitioning');
+    }, 200);
     
     // Actualizar el meta theme-color
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');

@@ -22,29 +22,48 @@ export default function ProductsList() {
     loadProducts();
   }, [filters]);
 
-  const loadProducts = async () => {
-    await getProducts(
-      filters,
-      (data) => {
-        setProducts(data.products);
-        setPagination(data.pagination);
-      },
-      (err) => console.error('Error cargando productos:', err)
-    );
+const loadProducts = async () => {
+  // Aseguramos que existan valores por defecto para paginación si 'filters' está vacío
+  const params = {
+    page: filters.page || 1,
+    limit: filters.limit || 20,
+    ...filters
   };
 
-  const handleDeleteProduct = async (productId, productName) => {
-    if (!confirm(`¿ELIMINAR el producto "${productName}"? Esta acción no se puede deshacer.`)) return;
-    
-    await deleteProduct(
-      productId,
-      () => {
-        loadProducts();
-        alert('Producto eliminado exitosamente');
-      },
-      (err) => alert('Error: ' + err)
-    );
-  };
+  await getProducts(
+    params, 
+    (data) => {
+      // El backend suele devolver 'products' o 'data'. 
+      // Usamos fallback por si la estructura varía.
+      setProducts(data.products || data); 
+      setPagination(data.pagination || {});
+    },
+    (err) => {
+      console.error('Error cargando productos:', err);
+    }
+  );
+};
+
+const handleDeleteProduct = async (productId, productName) => {
+  if (!window.confirm(`¿ELIMINAR "${productName}"?`)) return;
+  
+  // 1. Llamada al backend
+  await deleteProduct(
+    productId,
+    () => {
+      // 2. ACTUALIZACIÓN FORZADA DEL ESTADO
+      // Usamos una función dentro de setProducts para asegurar que tenemos la versión más reciente
+      setProducts((currentProducts) => {
+        const updatedList = currentProducts.filter(p => p._id !== productId);
+        console.log("Nueva lista tras eliminar:", updatedList); // Revisa esto en consola
+        return updatedList;
+      });
+      
+      alert('Eliminado con éxito');
+    },
+    (err) => alert('Error al eliminar: ' + err)
+  );
+};
 
   return (
     <div className="p-6">
@@ -122,7 +141,7 @@ export default function ProductsList() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 gap-4 p-4">
             {products.map((product) => (
               <ProductCard
                 key={product._id}

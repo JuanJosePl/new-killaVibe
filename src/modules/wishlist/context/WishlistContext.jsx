@@ -133,12 +133,13 @@ export const WishlistProvider = ({ children }) => {
     [isCacheValid, updateCache, cache.data, wishlist]
   );
 
-  const addItem = useCallback(
-    async (itemData) => {
-      try {
-        setLoading(true);
-        setError(null);
+ const addItem = useCallback(
+  async (itemData) => {
+    try {
+      setLoading(true);
+      setError(null);
 
+<<<<<<< Updated upstream
         const response = await wishlistAPI.addItem(itemData);
 
         if (response?.data && mountedRef.current) {
@@ -158,10 +159,39 @@ export const WishlistProvider = ({ children }) => {
         if (mountedRef.current) {
           setLoading(false);
         }
+=======
+      const response = await wishlistAPI.addItem(itemData);
+      
+      // EXPLICACIÓN: Si tu API devuelve { success: true, data: { items: [...] } }
+      // response ya es ese objeto. 
+      // Si el backend devuelve la wishlist en la propiedad 'data':
+      const updatedWishlist = response?.data || response;
+
+      if (mountedRef.current) {
+        setWishlist(updatedWishlist);
+        updateCache(updatedWishlist);
+        return response;
+>>>>>>> Stashed changes
       }
-    },
-    [updateCache]
-  );
+    } catch (err) {
+      // Manejo del error 500 que vimos en los logs
+      const errorMsg = err.response?.data?.message || "Error al agregar producto";
+      
+      if (err.response?.status === 500 && errorMsg.includes("ya está en tu lista")) {
+        // Si el error es solo que ya existe, refrescamos para sincronizar
+        fetchWishlist(true); 
+      }
+
+      if (mountedRef.current) {
+        setError(errorMsg);
+      }
+      return null;
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  },
+  [updateCache, fetchWishlist] // Añadir fetchWishlist a las dependencias
+);
 
   const removeItem = useCallback(
     async (productId) => {

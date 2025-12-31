@@ -5,8 +5,11 @@ import { useState, useEffect } from "react";
 // Hook real de productos
 import { useProducts } from "../contexts/ProductsContext";
 
+
 // Componente ProductCard (importar el real)
 import { ProductCard } from "./ProductCard";
+import { addToCart } from "../../cart/api/cart.api";
+import { useProductWishlist } from '../hooks/useProductWishlist';
 
 export function FeaturedProducts() {
   // Usar el hook real con filtro de featured
@@ -16,6 +19,9 @@ export function FeaturedProducts() {
     status: 'active',
     visibility: 'public'
   });
+
+const { toggleProductWishlist, isProductInWishlist, isInWishlist } = useProductWishlist();
+
 
   if (loading) {
     return (
@@ -107,6 +113,9 @@ export function FeaturedProducts() {
               <ProductCard
                 product={product}
                 showWishlistButton={true}
+                onAddToCart={ () => addToCart ({ productId: product._id, quantity: 1 }) }
+                onToggleWishlist={() => toggleProductWishlist (product) }
+                isInWishlist={isProductInWishlist(product._id)}
               />
             </div>
           ))}

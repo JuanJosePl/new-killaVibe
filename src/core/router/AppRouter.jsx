@@ -88,7 +88,9 @@ const ProductForm = lazy(() => import('../../modules/admin/pages/Products/Produc
 const CategoriesList = lazy(() => import('../../modules/admin/pages/Categories/CategoriesList'));
 const OrdersList = lazy(() => import('../../modules/admin/pages/Orders/OrdersList'));
 const OrderDetails = lazy(() => import('../../modules/admin/pages/Orders/OrderDetails'));
+const AdminContactPage =  lazy(() => import('../../modules/admin/pages/Contact/ContactPage') );
 const AnalyticsDashboard = lazy(() => import('../../modules/admin/pages/Analytics/AnalyticsDashboard'));
+// const Reviews = lazy(() => import ('../../modules/admin/pages/reviews/'))
 
 // ============================================================================
 // APP ROUTER COMPONENT
@@ -181,7 +183,13 @@ export default function AppRouter() {
             <Route index element={<OrdersList />} />
             <Route path=":id" element={<OrderDetails />} />
           </Route>
-          
+
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* CONTACT                                                        */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="contact" element={<AdminContactPage/>} />
+            
+
           {/* ────────────────────────────────────────────────────────────── */}
           {/* ANALYTICS                                                       */}
           {/* ────────────────────────────────────────────────────────────── */}
