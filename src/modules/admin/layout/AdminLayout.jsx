@@ -89,6 +89,13 @@ export default function AdminLayout() {
               label="Usuarios"
               active={location.pathname.startsWith('/admin/users')}
             />
+
+            <NavItem
+              to="/admin/contact"
+              icon="📧"
+              label="Mensajes"
+              active={location.pathname.startsWith('/admin/contact')}
+            />
             
             <NavItem
               to="/admin/analytics"

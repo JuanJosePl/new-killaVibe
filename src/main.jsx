@@ -35,17 +35,23 @@ import { AuthProvider } from './core/providers/AuthProvider';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
+
     {/* 
       ══════════════════════════════════════════════════════════════════════
       BROWSER ROUTER
       ══════════════════════════════════════════════════════════════════════
       Habilita React Router DOM
       ⚠️ Solo debe existir UNA instancia en toda la app
-    */}
+      */}
     <BrowserRouter future={{
-    v7_startTransition: true,
-    v7_relativeSplatPath: true,
-  }}>
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+      v7_fetcherPersist: true,
+      v7_normalizeFormMethod: true,
+      v7_partialHydration: true,
+      v7_skipActionErrorRevalidation: true,
+    }}>
+
       
       {/* 
         ══════════════════════════════════════════════════════════════════════
@@ -53,7 +59,7 @@ createRoot(document.getElementById('root')).render(
         ══════════════════════════════════════════════════════════════════════
         Proporciona contexto de autenticación a toda la app
         Debe estar aquí para envolver TODO (incluyendo router)
-      */}
+        */}
       <AuthProvider>
         
         {/* 
@@ -61,7 +67,7 @@ createRoot(document.getElementById('root')).render(
           APP COMPONENT
           ══════════════════════════════════════════════════════════════════════
           Contiene todos los demás providers y el router
-        */}
+          */}
         <App />
         
       </AuthProvider>

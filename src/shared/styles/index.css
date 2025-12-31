@@ -506,6 +506,13 @@ html {
   animation: float 6s ease-in-out infinite;
 }
 
+/* En index.css */
+.theme-transitioning * {
+  transition: background-color 200ms ease-in-out, 
+              border-color 200ms ease-in-out,
+              color 200ms ease-in-out !important;
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
   50% { transform: translateY(-20px) rotate(180deg); }

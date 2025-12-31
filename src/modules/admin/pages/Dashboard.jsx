@@ -25,6 +25,7 @@ export default function AdminDashboard() {
     setRefreshing(true);
     await getDashboardStats(
       (data) => {
+        console.log("DATOS RECIBIDOS DEL BACKEND:", data); // Mira la consola con F12
         setStats(data);
         console.log('[DASHBOARD] Stats cargadas:', data);
       },

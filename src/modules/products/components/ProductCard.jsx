@@ -1,3 +1,5 @@
+// src/modules/products/components/ProductCard.jsx
+
 import { useState } from "react";
 import {
   ShoppingCart,
@@ -12,10 +14,12 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// Hooks reales integrados
+// ✅ HOOKS INTEGRADOS
 import { useAuth } from "../../../core/hooks/useAuth";
+import { useProductCart } from "../hooks/useProductCart"; // ✅ NUEVO
+import { useProductWishlist } from "../hooks/useProductWishlist"; // ✅ NUEVO
 
-// Utilidades reales
+// Utilidades
 import { formatPrice, calculateDiscountPercentage } from "../utils/priceHelpers";
 import { 
   isNewProduct, 
@@ -29,59 +33,73 @@ export function ProductCard({
   className = "",
   showWishlistButton = true,
   variant = "default",
-  onAddToCart,
-  onToggleWishlist,
-  isInWishlist = false,
+  onAddToCart, // Callback opcional (si quieres override)
+  onToggleWishlist, // Callback opcional
+  isInWishlist: isInWishlistProp, // Prop opcional
 }) {
   const { isAuthenticated } = useAuth();
-  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+  
+  // ✅ INTEGRACIÓN: Hooks de cart y wishlist
+  const { addProductToCart, isAdding } = useProductCart();
+  const { 
+    toggleProductWishlist, 
+    isProductInWishlist, 
+    loading: wishlistLoading 
+  } = useProductWishlist();
+
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const handleAddToCart = (e) => {
+  // ✅ Determinar si está en wishlist
+  const isInWishlist = isInWishlistProp !== undefined 
+    ? isInWishlistProp 
+    : isProductInWishlist(product._id);
+
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
+  const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isAuthenticated) {
-      alert("Debes iniciar sesión para agregar productos al carrito.");
+    // Si hay callback personalizado, usarlo
+    if (onAddToCart) {
+      onAddToCart(product);
       return;
     }
 
-    if (onAddToCart) {
-      onAddToCart(product);
-    }
+    // Sino, usar el hook integrado
+    await addProductToCart(product, 1, {}, {
+      showToast: true,
+      redirectToCart: false
+    });
   };
 
   const handleToggleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!isAuthenticated) {
-      alert("Debes iniciar sesión para agregar productos a favoritos.");
+    // Si hay callback personalizado, usarlo
+    if (onToggleWishlist) {
+      await onToggleWishlist(product);
       return;
     }
 
-    setIsWishlistLoading(true);
-    try {
-      if (onToggleWishlist) {
-        await onToggleWishlist(product);
-      }
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    } catch (error) {
-      console.error("Error toggling wishlist:", error);
-    } finally {
-      setIsWishlistLoading(false);
-    }
+    // Sino, usar el hook integrado
+    await toggleProductWishlist(product);
   };
 
-  // Calcular valores usando helpers reales
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+
   const discountPercentage = calculateDiscountPercentage(product.comparePrice, product.price);
   const isNew = isNewProduct(product);
   const lowStock = isLowStock(product);
   const available = isProductAvailable(product);
   const primaryImage = getPrimaryImage(product);
 
-  // Calculate average rating usando la estructura real del backend
   const averageRating = product.rating?.average || null;
   const ratingCount = product.rating?.count || 0;
 
@@ -136,12 +154,12 @@ export function ProductCard({
             <div className="absolute top-3 right-3 z-20">
               <button
                 onClick={handleToggleWishlist}
-                disabled={isWishlistLoading}
+                disabled={wishlistLoading}
                 className={`h-10 w-10 rounded-full backdrop-blur-md border-0 shadow-lg transition-all duration-300 flex items-center justify-center ${
                   isInWishlist
                     ? "bg-red-500 text-white hover:bg-red-600 scale-110"
                     : "bg-white/90 text-gray-700 hover:bg-white hover:scale-110 hover:shadow-xl"
-                }`}
+                } ${wishlistLoading ? 'cursor-wait opacity-70' : ''}`}
                 title={
                   isInWishlist ? "Quitar de favoritos" : "Agregar a favoritos"
                 }
@@ -157,7 +175,6 @@ export function ProductCard({
 
           {/* Image Container */}
           <div className="relative aspect-square overflow-hidden bg-muted/30">
-            {/* Loading skeleton */}
             {!isImageLoaded && (
               <div className="absolute inset-0 bg-gradient-to-br from-muted via-muted/50 to-muted animate-shimmer flex items-center justify-center">
                 <div className="text-muted-foreground animate-pulse">
@@ -166,7 +183,6 @@ export function ProductCard({
               </div>
             )}
 
-            {/* Product Image */}
             <img
               src={primaryImage}
               alt={product.name}
@@ -177,13 +193,11 @@ export function ProductCard({
               loading="lazy"
             />
 
-            {/* Gradient Overlay */}
             <div
               className={`absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent transition-opacity duration-500 ${
                 isHovered ? "opacity-100" : "opacity-0"
               }`}
             >
-              {/* Quick Info */}
               <div className="absolute bottom-3 left-3 right-3 text-white">
                 <div className="flex items-center justify-between text-xs font-semibold">
                   <div className="flex items-center space-x-1 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
@@ -198,7 +212,6 @@ export function ProductCard({
               </div>
             </div>
 
-            {/* Quick View Button */}
             <div
               className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
                 isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -210,7 +223,6 @@ export function ProductCard({
               </button>
             </div>
 
-            {/* Corner decoration */}
             <div
               className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/20 to-transparent transition-opacity duration-500 ${
                 isHovered ? "opacity-100" : "opacity-0"
@@ -220,24 +232,20 @@ export function ProductCard({
 
           {/* Product Info */}
           <div className="p-5 space-y-3">
-            {/* Category */}
             {product.mainCategory && (
               <div className="text-xs uppercase tracking-wider font-bold text-muted-foreground">
                 {product.mainCategory.name}
               </div>
             )}
 
-            {/* Title */}
             <h3 className="font-bold text-base leading-tight line-clamp-2 group-hover:text-primary transition-colors duration-300 min-h-[2.5rem]">
               {product.name}
             </h3>
 
-            {/* Description */}
             <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed min-h-[2.5rem]">
               {product.shortDescription || product.description}
             </p>
 
-            {/* Rating */}
             {averageRating && ratingCount > 0 && (
               <div className="flex items-center space-x-2">
                 <div className="flex items-center space-x-0.5">
@@ -261,7 +269,6 @@ export function ProductCard({
               </div>
             )}
 
-            {/* Price Section */}
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -276,7 +283,6 @@ export function ProductCard({
                     )}
                   </div>
 
-                  {/* Savings */}
                   {discountPercentage > 0 && (
                     <div className="text-xs font-bold text-green-600 flex items-center space-x-1">
                       <Sparkles className="h-3 w-3" />
@@ -292,24 +298,34 @@ export function ProductCard({
             {/* Add to Cart Button */}
             <button
               onClick={handleAddToCart}
-              disabled={!available || !isAuthenticated}
+              disabled={!available || !isAuthenticated || isAdding}
               className={`w-full py-3.5 rounded-xl font-bold transition-all duration-300 flex items-center justify-center space-x-2 ${
                 !available
                   ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : isAdding
+                  ? "bg-gray-400 text-white cursor-wait"
                   : "bg-gradient-to-r from-primary to-accent text-white hover:shadow-xl hover:scale-105 active:scale-95"
               }`}
             >
-              <ShoppingCart className="h-5 w-5" />
-              <span>
-                {!isAuthenticated
-                  ? "Iniciar sesión"
-                  : !available
-                  ? "Agotado"
-                  : "Agregar al carrito"}
-              </span>
+              {isAdding ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Agregando...</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingCart className="h-5 w-5" />
+                  <span>
+                    {!isAuthenticated
+                      ? "Iniciar sesión"
+                      : !available
+                      ? "Agotado"
+                      : "Agregar al carrito"}
+                  </span>
+                </>
+              )}
             </button>
 
-            {/* Stock Status */}
             {available && product.stock > 0 && (
               <div className="text-xs text-center text-muted-foreground">
                 {product.stock > 10 ? (
@@ -327,7 +343,6 @@ export function ProductCard({
             )}
           </div>
 
-          {/* Animated border on hover */}
           <div
             className={`absolute inset-0 border-2 border-transparent rounded-2xl pointer-events-none transition-all duration-500 ${
               isHovered
@@ -336,7 +351,6 @@ export function ProductCard({
             }`}
           ></div>
 
-          {/* Shine effect */}
           <div
             className={`absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full transition-transform duration-1000 pointer-events-none ${
               isHovered ? "translate-x-full" : ""

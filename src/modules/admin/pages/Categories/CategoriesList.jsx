@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAdmin } from '../../hooks/useAdmin';
 
+
 export default function CategoriesList() {
   const { 
     getCategories, 
@@ -17,13 +18,15 @@ export default function CategoriesList() {
   const [hierarchy, setHierarchy] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
+  const [imageUrl, setImageUrl] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     slug: '',
     parentCategory: '',
     isActive: true,
-    featured: false
+    featured: false,
+    iamges: []
   });
 
   useEffect(() => {
@@ -32,39 +35,61 @@ export default function CategoriesList() {
   }, []);
 
   const loadCategories = async () => {
-    await getCategories(
-      (data) => setCategories(data.categories || []),
+  await getCategories(
+    (data) => {
+        // CORRECCIÓN: Según tu JSON, el array está en data.data.data
+        // Pero si tu hook ya lo limpia, nos aseguramos de tomar el array real:
+        const rawData = data?.data?.data || data?.data || data;
+        setCategories(Array.isArray(rawData) ? rawData : []);
+      },
       (err) => console.error('Error cargando categorías:', err)
     );
   };
 
-  const loadHierarchy = async () => {
+const loadHierarchy = async () => {
     await getCategoriesHierarchy(
-      (data) => setHierarchy(data.hierarchy || []),
+      (data) => {
+        // CORRECCIÓN: El hierarchy viene en response.data directo según tu JSON
+        const rawHierarchy = data?.data || data;
+        setHierarchy(Array.isArray(rawHierarchy) ? rawHierarchy : []);
+      },
       (err) => console.error('Error cargando jerarquía:', err)
     );
   };
+  
 
   const handleOpenModal = (category = null) => {
     if (category) {
       setEditingCategory(category);
+      // Convertimos el objeto del backend al array que usa tu formulario
+    const currentImages = [];
+    if (category.images?.thumbnail) {
+      currentImages.push({ 
+        url: category.images.thumbnail, 
+        alt: category.name, 
+        isPrimary: true 
+      });
+    }
       setFormData({
         name: category.name,
         description: category.description || '',
         slug: category.slug,
         parentCategory: category.parentCategory?._id || '',
         isActive: category.isActive ?? true,
-        featured: category.featured ?? false
+        featured: category.featured ?? false,
+        images: currentImages
       });
     } else {
       setEditingCategory(null);
+      setImageUrl('');
       setFormData({
         name: '',
         description: '',
         slug: '',
         parentCategory: '',
         isActive: true,
-        featured: false
+        featured: false,
+        images: []
       });
     }
     setShowModal(true);
@@ -94,43 +119,67 @@ export default function CategoriesList() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+
+// Obtenemos la URL de la imagen marcada como principal o la primera del array
+  const mainImage = formData.images.find(img => img.isPrimary)?.url || 
+  (formData.images.length > 0 ? formData.images[0].url : null);
+  
+  if (!formData.name.trim()) {
+    alert('El nombre es requerido');
+    return;
+  }
+
+  // --- AQUÍ HACEMOS LAS LIMPIEZAS Y CONVERSIONES ---
+  const categoryData = {
+    ...formData,
+    // Aseguramos que el slug esté bien generado/limpio antes de enviar
+    slug: generateSlug(formData.name), 
     
-    if (!formData.name.trim()) {
-      alert('El nombre es requerido');
-      return;
-    }
+    // Si tuvieras campos numéricos en categorías (como orden o stock):
+    // order: Number(formData.order) || 0,
+    
+    parentCategory: formData.parentCategory || undefined,
 
-    const categoryData = {
-      ...formData,
-      parentCategory: formData.parentCategory || undefined
-    };
-
-    if (editingCategory) {
-      await updateCategory(
-        editingCategory._id,
-        categoryData,
-        () => {
-          loadCategories();
-          loadHierarchy();
-          handleCloseModal();
-          alert('Categoría actualizada exitosamente');
-        },
-        (err) => alert('Error: ' + err)
-      );
-    } else {
-      await createCategory(
-        categoryData,
-        () => {
-          loadCategories();
-          loadHierarchy();
-          handleCloseModal();
-          alert('Categoría creada exitosamente');
-        },
-        (err) => alert('Error: ' + err)
-      );
+    // ✅ ESTRUCTURA CORRECTA PARA EL BACKEND DE CATEGORÍAS
+    images: {
+      thumbnail: mainImage, // La imagen principal
+      hero: mainImage,      // Usamos la misma o la segunda si existe
+      icon: mainImage       // Usamos la misma para asegurar que se vea algo
+    },
+    seo: {
+      metaTitle: formData.name,
+      metaDescription: formData.description ? formData.description.substring(0, 157) + "..." : formData.name,
+      keywords: []
     }
   };
+  // ------------------------------------------------
+
+  if (editingCategory) {
+    await updateCategory(
+      editingCategory._id,
+      categoryData,
+      () => {
+        loadCategories();
+        loadHierarchy();
+        handleCloseModal();
+        alert('Categoría actualizada exitosamente');
+      },
+      (err) => alert('Error: ' + err)
+    );
+  } else {
+    await createCategory(
+      categoryData,
+      () => {
+        loadCategories();
+        loadHierarchy();
+        handleCloseModal();
+        alert('Categoría creada exitosamente');
+      },
+      (err) => alert('Error: ' + err)
+    );
+  }
+};
 
   const handleDelete = async (categoryId, categoryName) => {
     if (!confirm(`¿ELIMINAR la categoría "${categoryName}"? Esto puede afectar productos asociados.`)) return;
@@ -145,6 +194,39 @@ export default function CategoriesList() {
       (err) => alert('Error: ' + err)
     );
   };
+
+  const handleAddImage = () => {
+  if (!imageUrl.trim()) return;
+  
+  setFormData({
+    ...formData,
+    images: [
+      ...(formData.images || []), // Uso de fallback por si es undefined
+      {
+        url: imageUrl,
+        alt: formData.name || 'Categoría',
+        isPrimary: (formData.images || []).length === 0
+      }
+    ]
+  });
+  setImageUrl('');
+};
+
+const handleRemoveImage = (index) => {
+  const newImages = formData.images.filter((_, i) => i !== index);
+  if (formData.images[index].isPrimary && newImages.length > 0) {
+    newImages[0].isPrimary = true;
+  }
+  setFormData({ ...formData, images: newImages });
+};
+
+const handleSetPrimary = (index) => {
+  const newImages = formData.images.map((img, i) => ({
+    ...img,
+    isPrimary: i === index
+  }));
+  setFormData({ ...formData, images: newImages });
+};
 
   return (
     <div className="p-6">
@@ -167,6 +249,8 @@ export default function CategoriesList() {
           <span>Nueva Categoría</span>
         </button>
       </div>
+
+      
 
       {/* Categories List */}
       {loading ? (
@@ -295,6 +379,77 @@ export default function CategoriesList() {
                   </select>
                 </div>
 
+                        {/* Images */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+            Imágenes
+          </h2>
+          
+          {/* Add image */}
+          <div className="flex gap-2 mb-4">
+            <input
+              type="url"
+              placeholder="URL de la imagen"
+              value={imageUrl || ''}
+              onChange={(e) => setImageUrl(e.target.value)}
+              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={handleAddImage}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Agregar
+            </button>
+          </div>
+
+          {/* Images grid */}
+          {formData.images.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {formData.images.map((img, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={img.url}
+                    alt={img.alt || 'Categoría'}
+                    className="w-full aspect-square object-cover rounded-lg"
+                    onError={(e) => {
+                      e.target.src = 'https://via.placeholder.com/300?text=Error';
+                    }}
+                  />
+                  {img.isPrimary && (
+                    <span className="absolute top-2 left-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                      Principal
+                    </span>
+                  )}
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                    {!img.isPrimary && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetPrimary(index)}
+                        className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                      >
+                        Principal
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveImage(index)}
+                      className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
+              No hay imágenes agregadas
+            </p>
+          )}
+        </div>
+
+
                 {/* Checkboxes */}
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -349,40 +504,42 @@ export default function CategoriesList() {
 // ==============================================================================
 
 function CategoryItem({ category, onEdit, onDelete }) {
+  // CORRECCIÓN PARA EL ICONO: Usamos category.images.icon del JSON
+  const iconUrl = category.images?.icon || category.images?.thumbnail;
+
   return (
-    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition">
+    <div className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-xl border border-gray-100 dark:border-gray-600 hover:shadow-md transition">
+      {/* Visualización del Icono */}
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-600 flex-shrink-0">
+        {iconUrl ? (
+          <img src={iconUrl} alt={category.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-xl">📁</div>
+        )}
+      </div>
+
       <div className="flex-1">
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className="font-medium text-gray-900 dark:text-white">
-            {category.name}
-          </h3>
-          {!category.isActive && (
-            <span className="text-xs px-2 py-1 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 rounded-full">
-              Inactivo
-            </span>
-          )}
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-gray-900 dark:text-white">{category.name}</h3>
           {category.featured && (
-            <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200 rounded-full">
+            <span className="text-[10px] px-2 py-0.5 bg-purple-100 text-purple-600 font-bold rounded-full uppercase">
               Destacado
             </span>
           )}
         </div>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Slug: {category.slug}
-          {category.parentCategory && ` • Padre: ${category.parentCategory.name}`}
-        </p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">slug: {category.slug}</p>
       </div>
+
+      {/* Contador de productos (Viene del backend) */}
+      <div className="hidden sm:block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs font-bold">
+        {category.productCount || 0} productos
+      </div>
+
       <div className="flex gap-2">
-        <button
-          onClick={() => onEdit(category)}
-          className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm"
-        >
+        <button onClick={() => onEdit(category)} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-lg">
           ✏️
         </button>
-        <button
-          onClick={() => onDelete(category._id, category.name)}
-          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 transition text-sm"
-        >
+        <button onClick={() => onDelete(category._id, category.name)} className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-lg">
           🗑️
         </button>
       </div>
@@ -391,37 +548,45 @@ function CategoryItem({ category, onEdit, onDelete }) {
 }
 
 function CategoryTreeItem({ category, onEdit, level }) {
-  const indent = level * 24;
+  const indent = level * 20;
+  const hasChildren = category.children && category.children.length > 0;
+  // Imagen para la jerarquía (más pequeña)
+  const thumbUrl = category.images?.thumbnail;
 
   return (
-    <div>
+    <div className="mb-1">
       <div
-        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition"
+        className={`flex items-center justify-between p-3 rounded-lg transition ${
+          level === 0 ? 'bg-gray-100 dark:bg-gray-700/50' : 'bg-transparent border-l-2 border-gray-200 dark:border-gray-600'
+        } hover:bg-blue-50 dark:hover:bg-blue-900/20`}
         style={{ marginLeft: `${indent}px` }}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {level > 0 && <span className="text-gray-400">└─</span>}
-          <span className="font-medium text-gray-900 dark:text-white">
+          
+          {/* Miniatura en Jerarquía */}
+          <div className="w-6 h-6 rounded bg-gray-300 overflow-hidden">
+             {thumbUrl && <img src={thumbUrl} className="w-full h-full object-cover" />}
+          </div>
+
+          <span className={`${level === 0 ? 'font-bold' : 'font-medium'} text-gray-900 dark:text-white`}>
             {category.name}
           </span>
-          {category.featured && <span>⭐</span>}
+
+          {/* Contador de productos al lado del nombre */}
+          <span className="text-[10px] text-gray-500 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded-md border border-gray-200 dark:border-gray-600">
+            {category.productCount || 0}
+          </span>
         </div>
-        <button
-          onClick={() => onEdit(category)}
-          className="text-blue-600 dark:text-blue-400 hover:underline text-sm"
-        >
+        <button onClick={() => onEdit(category)} className="text-blue-600 dark:text-blue-400 hover:underline text-xs">
           Editar
         </button>
       </div>
-      {category.subcategories && category.subcategories.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {category.subcategories.map((subcat) => (
-            <CategoryTreeItem
-              key={subcat._id}
-              category={subcat}
-              onEdit={onEdit}
-              level={level + 1}
-            />
+      
+      {hasChildren && (
+        <div className="mt-1">
+          {category.children.map((subcat) => (
+            <CategoryTreeItem key={subcat._id} category={subcat} onEdit={onEdit} level={level + 1} />
           ))}
         </div>
       )}
