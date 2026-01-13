@@ -137,7 +137,7 @@ export function AuthProvider({ children }) {
     try {
       const response = await authAPI.login(credentials);
       
-      // ✅ Respuesta exitosa: { success: true, data: { token, refreshToken, user } }
+      // Respuesta exitosa: { success: true, data: { token, refreshToken, user } }
       if (response.success && response.data) {
         const authData = {
           user: response.data.user,
@@ -146,6 +146,16 @@ export function AuthProvider({ children }) {
         };
         
         updateAuthState(authData);
+
+        // NUEVO: Importar dinámicamente syncManager (evita circular dependency)
+        setTimeout(async () => {
+          try {
+            const { syncGuestDataToUser } = await import('../../core/utils/syncManager');
+            await syncGuestDataToUser({ silent: false });
+          } catch (error) {
+            console.error('[AuthProvider] Error en sincronización:', error);
+          }
+        }, 500);
         
         return { 
           success: true, 
@@ -347,59 +357,32 @@ export function AuthProvider({ children }) {
   // ✅ INICIALIZACIÓN: Cargar datos de localStorage al montar
   // ===================================================================
   useEffect(() => {
-    const initAuth = async () => {
-      setLoading(true);
-      
-      const storedAuth = loadFromStorage();
-      
-      if (storedAuth && storedAuth.token) {
-        // ✅ Verificar si el token es válido llamando a GET /profile
-        try {
-          const response = await authAPI.getProfile(); // ✅ SIN token - el interceptor lo envía automáticamente
-          
-          if (response.success && response.data) {
-            // ✅ Token válido, actualizar estado
-            updateAuthState({
-              user: response.data.user,
-              token: storedAuth.token,
-              refreshToken: storedAuth.refreshToken
-            });
-          } else {
-            // ✅ Token inválido, limpiar
-            clearStorage();
-          }
-        } catch (error) {
-          console.error('Init auth error:', error);
-          
-          // ✅ Si el error es 401, intentar refresh token
-          if (error.response?.status === 401 && storedAuth.refreshToken) {
-            try {
-              const refreshResponse = await authAPI.refreshToken(storedAuth.refreshToken);
-              
-              if (refreshResponse.success && refreshResponse.data) {
-                updateAuthState({
-                  user: storedAuth.user,
-                  token: refreshResponse.data.token,
-                  refreshToken: storedAuth.refreshToken
-                });
-              } else {
-                clearStorage();
-              }
-            } catch (refreshError) {
-              console.error('Refresh on init error:', refreshError);
-              clearStorage();
-            }
-          } else {
-            clearStorage();
-          }
-        }
-      }
-      
+  const initAuth = async () => {
+    setLoading(true);
+    
+    const storedAuth = loadFromStorage();
+    
+    if (storedAuth?.token) {
+      // ✅ Primero, actualizar estado con datos del storage
+      updateAuthState(storedAuth);
       setLoading(false);
-    };
+      
+      // ✅ LUEGO, validar en segundo plano (sin bloquear UI)
+      refreshUserProfile().catch(() => {
+        // Si falla, intentar refresh token
+        if (storedAuth.refreshToken) {
+          refreshAccessToken().catch(() => logout());
+        } else {
+          logout();
+        }
+      });
+    } else {
+      setLoading(false);
+    }
+  };
 
-    initAuth();
-  }, [loadFromStorage, updateAuthState, clearStorage]);
+  initAuth();
+}, []);
 
   // ✅ Valor del contexto exportado
   const value = {

@@ -26,28 +26,31 @@ export default function UserDetails() {
   }, [id]);
 
   const loadUserDetails = async () => {
-    await getUserDetails(
-      id,
-      (data) => {
-        setUser(data.user);
-        setFormData({
-          role: data.user.role,
-          isActive: data.user.isActive,
-          profile: {
-            firstName: data.user.profile?.firstName || '',
-            lastName: data.user.profile?.lastName || '',
-            phone: data.user.profile?.phone || ''
-          }
-        });
-      },
-      (err) => {
-        console.error('Error cargando usuario:', err);
-        alert('Error al cargar usuario');
-        navigate('/admin/users');
-      }
-    );
-  };
+  await getUserDetails(
+    id,
+    (response) => {
+      // ✅ El usuario es 'response' directamente (o 'response.data' si usas el hook)
+      // Basado en tu consola, la info está en la raíz del objeto recibido
+      const userData = response.data || response; 
 
+      setUser(userData);
+      setFormData({
+        role: userData.role || '',
+        isActive: userData.isActive ?? true,
+        profile: {
+          firstName: userData.profile?.firstName || userData.firstName || '',
+          lastName: userData.profile?.lastName || userData.lastName || '',
+          phone: userData.profile?.phone || userData.phone || ''
+        }
+      });
+    },
+    (err) => {
+      console.error('Error cargando usuario:', err);
+      alert('Error al cargar usuario');
+      navigate('/admin/users');
+    }
+  );
+};
   const handleSave = async () => {
     await updateUser(
       id,

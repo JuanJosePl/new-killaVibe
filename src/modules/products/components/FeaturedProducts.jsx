@@ -1,6 +1,8 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useProductCart } from "../hooks/useProductCart";
+import { useProductWishlist } from "../hooks/useProductWishlist";
 
 // Hook real de productos
 import { useProducts } from "../contexts/ProductsContext";
@@ -16,6 +18,8 @@ export function FeaturedProducts() {
     status: 'active',
     visibility: 'public'
   });
+  const { quickAddToCart } = useProductCart();
+  const { toggleProductWishlist, isProductInWishlist } = useProductWishlist();
 
   if (loading) {
     return (
@@ -105,8 +109,12 @@ export function FeaturedProducts() {
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <ProductCard
+                key={product._id}
                 product={product}
                 showWishlistButton={true}
+                onAddToCart={() => quickAddToCart(product)}
+                onToggleWishlist={() => toggleProductWishlist(product)}
+                isInWishlist={() => isProductInWishlist(product._id)}
               />
             </div>
           ))}

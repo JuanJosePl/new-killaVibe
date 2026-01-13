@@ -23,16 +23,14 @@ export default function UsersList() {
     loadUsers();
   }, [filters]);
 
-  const loadUsers = async () => {
-    await getUsers(
-      filters,
-      (data) => {
-        setUsers(data.users);
-        setPagination(data.pagination);
-      },
-      (err) => console.error('Error cargando usuarios:', err)
-    );
-  };
+const loadUsers = async () => {
+  const result = await getUsers(filters);
+  if (result.success) {
+    // Según tu log, el array está en result.data
+    setUsers(result.data || []); 
+  }
+};
+
 
   const handleSearch = (e) => {
     e.preventDefault();

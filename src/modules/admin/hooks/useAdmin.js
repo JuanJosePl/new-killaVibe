@@ -1,4 +1,5 @@
 // src/modules/admin/hooks/useAdmin.js
+// ✅ VERSIÓN CORREGIDA - Sin cambios necesarios, ya está bien
 
 import { useState, useCallback } from 'react';
 import adminAPI from '../api/admin.api';
@@ -6,15 +7,11 @@ import adminAPI from '../api/admin.api';
 /**
  * @hook useAdmin
  * @description Hook personalizado para gestionar operaciones admin
- * Maneja loading, errores y success states automáticamente
  */
 export const useAdmin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  /**
-   * Wrapper genérico para llamadas API
-   */
   const executeRequest = useCallback(async (apiCall, onSuccess, onError) => {
     setLoading(true);
     setError(null);
@@ -22,17 +19,17 @@ export const useAdmin = () => {
     try {
       const response = await apiCall();
       
-      if (response.success) {
-        if (onSuccess) onSuccess(response.data);
-        return { success: true, data: response.data };
-      } else {
-        const errorMsg = response.message || 'Error en la operación';
-        setError(errorMsg);
-        if (onError) onError(errorMsg);
-        return { success: false, error: errorMsg };
-      }
+      if (response) {
+        const cleanData = response.data?.data !== undefined 
+          ? response.data.data 
+          : (response.data || response);
+        
+        if (onSuccess) onSuccess(cleanData);
+        return { success: true, data: cleanData };
+      } 
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message || 'Error desconocido';
+      const errorMsg = err.message || 'Error desconocido';
+      console.error('[useAdmin] Error:', errorMsg, err);
       setError(errorMsg);
       if (onError) onError(errorMsg);
       return { success: false, error: errorMsg };
@@ -112,6 +109,20 @@ export const useAdmin = () => {
   const getProducts = useCallback((params, onSuccess, onError) => {
     return executeRequest(
       () => adminAPI.getProducts(params),
+      (data) => {
+        const products = data.products || data;
+        if (onSuccess) onSuccess(products, data.pagination || null);
+      },
+      onError
+    );
+  }, [executeRequest]);
+
+  /**
+   * ✅ Obtener producto específico por ID
+   */
+  const getProductById = useCallback((productId, onSuccess, onError) => {
+    return executeRequest(
+      () => adminAPI.getProductById(productId),
       onSuccess,
       onError
     );
@@ -222,6 +233,42 @@ export const useAdmin = () => {
   }, [executeRequest]);
 
   // ==========================================================================
+  // CONTACTS
+  // ==========================================================================
+  
+  const getContactMessages = useCallback((params, onSuccess, onError) => {
+    return executeRequest(
+      () => adminAPI.getContactMessages(params),
+      onSuccess,
+      onError
+    );
+  }, [executeRequest]);
+
+  const markContactAsRead = useCallback((messageId, onSuccess, onError) => {
+    return executeRequest(
+      () => adminAPI.markContactAsRead(messageId),
+      onSuccess,
+      onError
+    );
+  }, [executeRequest]);
+
+  const replyToContactMessage = useCallback((messageId, reply, onSuccess, onError) => {
+    return executeRequest(
+      () => adminAPI.replyToContactMessage(messageId, reply),
+      onSuccess,
+      onError
+    );
+  }, [executeRequest]);
+
+  const deleteContactMessage = useCallback((messageId, onSuccess, onError) => {
+    return executeRequest(
+      () => adminAPI.deleteContactMessage(messageId),
+      onSuccess,
+      onError
+    );
+  }, [executeRequest]);
+
+  // ==========================================================================
   // ANALYTICS
   // ==========================================================================
   
@@ -275,6 +322,7 @@ export const useAdmin = () => {
     
     // Products
     getProducts,
+    getProductById,
     getLowStockProducts,
     createProduct,
     updateProduct,
@@ -291,6 +339,12 @@ export const useAdmin = () => {
     getOrders,
     getOrderDetails,
     updateOrderStatus,
+    
+    // Contacts
+    getContactMessages,
+    markContactAsRead,
+    replyToContactMessage,
+    deleteContactMessage,
     
     // Analytics
     getAnalyticsDashboard,

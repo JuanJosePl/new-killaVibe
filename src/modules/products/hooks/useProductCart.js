@@ -89,12 +89,7 @@ export const useProductCart = () => {
    */
   const addProductToCart = useCallback(
     async (product, quantity = 1, attributes = {}) => {
-      // Validación: Usuario autenticado
-      if (!isAuthenticated) {
-        toast.warning('Debes iniciar sesión para agregar productos al carrito');
-        return false;
-      }
-
+    
       // Validación: Producto disponible
       if (!isProductAvailable(product)) {
         toast.error('Producto no disponible');

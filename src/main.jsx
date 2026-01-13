@@ -16,7 +16,29 @@ import { WishlistProvider } from './modules/wishlist/context/WishlistContext.jsx
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    {/* 
+      ══════════════════════════════════════════════════════════════════════
+      BROWSER ROUTER
+      ══════════════════════════════════════════════════════════════════════
+      Habilita React Router DOM
+      ⚠️ Solo debe existir UNA instancia en toda la app
+    */}
+    <BrowserRouter future={{
+    v7_startTransition: true,
+    v7_relativeSplatPath: true,
+    v7_fetcherPersist: true,
+    v7_normalizeFormMethod: true,
+    v7_partialHydration: true,
+    v7_skipActionErrorRevalidation: true,
+  }}>
+      
+      {/* 
+        ══════════════════════════════════════════════════════════════════════
+        AUTH PROVIDER
+        ══════════════════════════════════════════════════════════════════════
+        Proporciona contexto de autenticación a toda la app
+        Debe estar aquí para envolver TODO (incluyendo router)
+      */}
       <AuthProvider>
         <ProductsProvider>
           <WishlistProvider>

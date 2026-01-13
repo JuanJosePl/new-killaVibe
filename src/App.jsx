@@ -2,6 +2,9 @@
 import { Suspense } from "react";
 import AppRouter from "./core/router/AppRouter";
 
+import { useEffect } from 'react';
+import { useAuth } from './core/hooks/useAuth';
+
 // ============================================================================
 // PROVIDERS GLOBALES - ✅ ORDEN CORRECTO
 // ============================================================================
@@ -16,6 +19,7 @@ import { ProductsProvider } from "./modules/products/contexts/ProductsContext";
 // ============================================================================
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { Toaster } from 'react-hot-toast';
 
 /**
  * @component App
@@ -139,6 +143,7 @@ function App() {
                   ══════════════════════════════════════════════════════════════════════
                   Sistema de notificaciones global
                 */}
+                <Toaster position="bottom-right" />
                 <ToastContainer
                   position="bottom-right"
                   autoClose={3000}
@@ -160,6 +165,23 @@ function App() {
       </ThemeProvider>
     </Suspense>
   );
+
+  function AppContent() {
+  const { isAuthenticated } = useAuth();
+  
+  useEffect(() => {
+    // Sync automático al detectar autenticación
+    if (isAuthenticated) {
+      import('./core/utils/syncManager').then(({ syncGuestDataToUser }) => {
+        syncGuestDataToUser({ silent: true });
+      });
+    }
+  }, [isAuthenticated]);
+
+  return <AppRouter />;
+}
+
+
 }
 
 export default App;

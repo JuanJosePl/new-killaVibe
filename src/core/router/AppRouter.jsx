@@ -14,6 +14,8 @@ import { AdminRoute } from '../guards/AdminRoute';
 // ============================================================================
 import Layout from '../../app/Layout'; // Layout público (Header + Footer)
 import AdminLayout from '../../modules/admin/layout/AdminLayout'; // Layout admin (Sidebar)
+import CustomerLayout from '../../modules/customer/layout/CustomerLayout'
+import CustomerProviders  from '../../modules/customer/providers/CustomerProviders';
 
 // ============================================================================
 // HOOKS
@@ -62,6 +64,10 @@ const ReturnsPage = lazy(() => import('../../app/devoluciones/Devoluciones'));
 const ShippingPage = lazy(() => import('../../app/envios/Envios'));
 const NotFoundPage = lazy(() => import('../../app/PaginaNoEncontrada'));
 const OffersPage = lazy(() => import('../../app/ofertas/Ofertas'));
+const CookiesPage = lazy(() => import('../../app/cookies/Cookies'));
+const FAQPage = lazy(() => import('../../app/FAQ/FAQ'));
+const PrivacidadPage = lazy(() => import('../../app/privacidad/Privacidad'));
+const TerminosPage = lazy(() => import('../../app/terminos/Terminos'));
 
 // Productos
 const ProductsListPage = lazy(() => import('../../modules/products/pages/ProductosLista'));
@@ -74,11 +80,9 @@ const CategoryDetailPage = lazy(() => import('../../modules/categories/pages/Cat
 
 const CartPage = lazy(() => import('../../modules/cart/pages/CartPage'))
 
-const WishListPage = lazy (() => import('../../modules/wishlist/pages/WishlistPage'))
+const WishlistPage = lazy (() => import('../../modules/wishlist/pages/WishlistPage'))
 
-// ────────────────────────────────────────────────────────────────────────────
-// MÓDULO CONTACT (src/modules/contact/pages/)
-// ────────────────────────────────────────────────────────────────────────────
+// Contact (src/modules/contact/pages/)
 
 const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
 
@@ -90,6 +94,29 @@ const ContactPage  = lazy(() => import('../../modules/contact/pages/Contacto'));
 // Auth
 const LoginPage = lazy(() => import('../../modules/auth/pages/Login'));
 const RegisterPage = lazy(() => import('../../modules/auth/pages/Register'));
+
+
+
+// ============================================================================
+// LAZY LOADED PAGES - CUSTOMER
+// ============================================================================
+
+const CustomerDashboardPage = lazy(() => import('../../modules/customer/pages/CustomerDashboardPage'));
+const CustomerCartPage = lazy(() => import('../../modules/customer/pages/CustomerCartPage'));
+const CustomerCategoriesPage = lazy(() => import('../../modules/customer/pages/CustomerCategoriesPage'));
+const CustomerCategoryDetailPage = lazy(() => import('../../modules/customer/pages/CustomerCategoryDetailPage'));
+const CustomerContactPage = lazy(() => import('../../modules/customer/pages/CustomerContactPage'));
+const CustomerOrdersPage = lazy(() => import('../../modules/customer/pages/CustomerOrdersPage'));
+const CustomerOrderDetailPage = lazy(() => import('../../modules/customer/pages/CustomerOrderDetailPage'));
+const CustomerProductsPage = lazy(() => import('../../modules/customer/pages/CustomerProductsPage'));
+const CustomerProductDetailPage = lazy(() => import('../../modules/customer/pages/CustomerProductDetailPage'));
+const CustomerProfilePage = lazy(() => import('../../modules/customer/pages/CustomerProfilePage'));
+const CustomerReviewsPage = lazy(() => import('../../modules/customer/pages/CustomerReviewsPage'));
+const CustomerWishlistPage = lazy(() => import('../../modules/customer/pages/CustomerWishlistPage'));
+
+
+
+
 
 // ============================================================================
 // LAZY LOADED PAGES - ADMIN
@@ -104,6 +131,7 @@ const CategoriesList = lazy(() => import('../../modules/admin/pages/Categories/C
 const OrdersList = lazy(() => import('../../modules/admin/pages/Orders/OrdersList'));
 const OrderDetails = lazy(() => import('../../modules/admin/pages/Orders/OrderDetails'));
 const AnalyticsDashboard = lazy(() => import('../../modules/admin/pages/Analytics/AnalyticsDashboard'));
+const AdminContactPage = lazy (() => import('../../modules/admin/pages/Contact/ContactPage'))
 
 // ============================================================================
 // APP ROUTER COMPONENT
@@ -132,6 +160,10 @@ export default function AppRouter() {
           <Route path="envios" element={<ShippingPage />} />
           <Route path="ofertas" element={<OffersPage />} />
           <Route path="contacto" element={<ContactPage />} />
+          <Route path="cookies" element={<CookiesPage />} />
+          <Route path="faq" element={<FAQPage />} />
+          <Route path="privacidad" element={<PrivacidadPage />} />
+          <Route path="terminos" element={<TerminosPage />} />
           
           {/* Productos */}
           <Route path="productos">
@@ -159,6 +191,51 @@ export default function AppRouter() {
         <Route path="auth/login" element={<LoginPage />} />
         <Route path="auth/register" element={<RegisterPage />} />
         
+
+{/* ================================================================== */}
+{/* RUTAS CUSTOMER (Encapsuladas con Prefijo)                         */}
+{/* ================================================================== */}
+<Route 
+  path="customer" // Prefijo base: /customer
+  element={
+    <PrivateRoute>
+      <CustomerProviders> 
+        <CustomerLayout /> 
+      </CustomerProviders>
+    </PrivateRoute>
+  } 
+>
+  {/* Index: /customer */}
+  <Route index element={<CustomerDashboardPage />} />
+  
+  {/* Perfil y Utilidades: /customer/profile, etc. */}
+  <Route path="profile" element={<CustomerProfilePage />} />
+  <Route path="cart" element={<CustomerCartPage />} />
+  <Route path="wishlist" element={<CustomerWishlistPage />} />
+  <Route path="reviews" element={<CustomerReviewsPage />} />
+  <Route path="contact" element={<CustomerContactPage />} />
+  
+  {/* Gestión de Pedidos: /customer/orders/ */}
+  <Route path="orders">
+    <Route index element={<CustomerOrdersPage />} />
+    <Route path=":id" element={<CustomerOrderDetailPage />} />
+  </Route>
+
+  {/* Navegación Protegida: /customer/categories/ */}
+  <Route path="categories">
+    <Route index element={<CustomerCategoriesPage />} />
+    <Route path=":categorySlug" element={<CustomerCategoryDetailPage />} />
+  </Route>
+
+  {/* Productos: /customer/products/ */}
+  <Route path="products">
+    <Route index element={<CustomerProductsPage />} />
+    <Route path=":slug" element={<CustomerProductDetailPage />} />
+  </Route>
+</Route>
+
+
+
         {/* ================================================================== */}
         {/* RUTAS ADMIN (Con AdminLayout + AdminRoute Guard)                  */}
         {/* ================================================================== */}
@@ -205,7 +282,12 @@ export default function AppRouter() {
             <Route index element={<OrdersList />} />
             <Route path=":id" element={<OrderDetails />} />
           </Route>
-          
+
+          {/* ────────────────────────────────────────────────────────────── */}
+          {/* MENSAJES                                                       */}
+          {/* ────────────────────────────────────────────────────────────── */}
+          <Route path="contact" element={<AdminContactPage />} />
+
           {/* ────────────────────────────────────────────────────────────── */}
           {/* ANALYTICS                                                       */}
           {/* ────────────────────────────────────────────────────────────── */}

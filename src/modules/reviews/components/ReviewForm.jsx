@@ -224,7 +224,6 @@ const ReviewForm = ({
                   }}
                   className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  ×
                 </button>
               </div>
             ))}
