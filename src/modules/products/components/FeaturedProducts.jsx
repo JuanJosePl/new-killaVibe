@@ -1,15 +1,14 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { useProductCart } from "../hooks/useProductCart";
+import { useProductWishlist } from "../hooks/useProductWishlist";
 
 // Hook real de productos
 import { useProducts } from "../contexts/ProductsContext";
 
-
 // Componente ProductCard (importar el real)
 import { ProductCard } from "./ProductCard";
-import { addToCart } from "../../cart/api/cart.api";
-import { useProductWishlist } from '../hooks/useProductWishlist';
 
 export function FeaturedProducts() {
   // Usar el hook real con filtro de featured
@@ -19,9 +18,8 @@ export function FeaturedProducts() {
     status: 'active',
     visibility: 'public'
   });
-
-const { toggleProductWishlist, isProductInWishlist, isInWishlist } = useProductWishlist();
-
+  const { quickAddToCart } = useProductCart();
+  const { toggleProductWishlist, isProductInWishlist } = useProductWishlist();
 
   if (loading) {
     return (
@@ -111,11 +109,12 @@ const { toggleProductWishlist, isProductInWishlist, isInWishlist } = useProductW
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <ProductCard
+                key={product._id}
                 product={product}
                 showWishlistButton={true}
-                onAddToCart={ () => addToCart ({ productId: product._id, quantity: 1 }) }
-                onToggleWishlist={() => toggleProductWishlist (product) }
-                isInWishlist={isProductInWishlist(product._id)}
+                onAddToCart={() => quickAddToCart(product)}
+                onToggleWishlist={() => toggleProductWishlist(product)}
+                isInWishlist={() => isProductInWishlist(product._id)}
               />
             </div>
           ))}

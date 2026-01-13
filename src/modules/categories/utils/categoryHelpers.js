@@ -28,7 +28,7 @@ export const hasSubcategories = (category) => {
  * Verifica si tiene productos
  */
 export const hasProducts = (category) => {
-  return category?.productCount > 0;
+  return (category?.productCount || 0) > 0;
 };
 
 /**
@@ -60,8 +60,11 @@ export const getCategoryImage = (category, type = 'thumbnail') => {
  * Formatea el conteo de productos
  */
 export const formatProductCount = (count) => {
-  if (!count || count === 0) return 'Sin productos';
+  // Si el valor es undefined, es porque aún se está calculando o cargando
+  if (count === undefined || count === null) return 'Cargando...';
+  if (count === 0) return '0 productos';
   if (count === 1) return '1 producto';
+  
   if (count < 1000) return `${count} productos`;
   
   const thousands = Math.floor(count / 1000);

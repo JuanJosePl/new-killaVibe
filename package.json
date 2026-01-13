@@ -30,12 +30,8 @@
     "axios": "^1.13.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-<<<<<<< Updated upstream
     "formik": "^2.4.9",
-    "killavibes-ecommerce": "file:",
-=======
     "framer-motion": "^12.23.26",
->>>>>>> Stashed changes
     "lucide-react": "^0.454.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -43,6 +39,7 @@
     "react-hook-form": "^7.60.0",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^6.26.0",
+    "react-toastify": "^11.0.5",
     "recharts": "^3.6.0",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "1.0.7",

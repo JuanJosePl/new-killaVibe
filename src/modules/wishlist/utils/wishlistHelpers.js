@@ -12,9 +12,7 @@
  * @returns {boolean}
  */
 export const isWishlistEmpty = (wishlist) => {
-  // Si el backend devuelve { items: [...] }
-  if (!wishlist || !wishlist.items) return true;
-  return wishlist.items.length === 0;
+  return !wishlist || !wishlist.items || wishlist.items.length === 0;
 };
 
 /**
@@ -130,7 +128,7 @@ export const formatPriceChangePercentage = (item) => {
   }
   
   const percentage = (
-    (item.product?.price - item.priceWhenAdded) / item.priceWhenAdded * 100
+    (item.product.price - item.priceWhenAdded) / item.priceWhenAdded * 100
   ).toFixed(1);
   
   const sign = percentage > 0 ? '+' : '';

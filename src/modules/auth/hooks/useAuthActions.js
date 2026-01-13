@@ -101,6 +101,7 @@ export const useAuthActions = (options = {}) => {
       const result = await login(credentials);
 
       if (result.success) {
+        window.dispatchEvent(new Event('auth-change'));
         // Callback de éxito
         if (onSuccess) {
           onSuccess(result);

@@ -1,195 +1,242 @@
 // src/modules/products/hooks/useProductCart.js
-
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-hot-toast';
-import { useCartContext } from '../../cart/context/CartContext';
+import { useCallback, useMemo } from 'react';
+import { toast } from 'react-toastify';
 import { useAuth } from '../../../core/hooks/useAuth';
+import { useCartActions } from '../../cart/hooks/useCartActions';
+import { useCart } from '../../cart/hooks/useCart';
+import { isProductAvailable } from '../utils/productHelpers';
 
 /**
  * @hook useProductCart
- * @description Hook para agregar productos al carrito desde cualquier componente
+ * @description Hook especializado para manejar Cart desde el módulo Products
  * 
- * CARACTERÍSTICAS:
- * - Verifica autenticación
- * - Validación de stock
- * - Notificaciones toast
- * - Redirección opcional
- * - Manejo de errores
+ * FUNCIONALIDADES:
+ * ✅ Agregar producto con validaciones
+ * ✅ Verificar si producto está en carrito
+ * ✅ Obtener cantidad de producto en carrito
+ * ✅ Actualizar cantidad
+ * ✅ Remover producto
+ * ✅ Validaciones de auth y disponibilidad
+ * ✅ Loading states
+ * ✅ Error handling con toasts
+ * 
+ * @returns {Object} Funciones y estados del cart para productos
  */
 export const useProductCart = () => {
-  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { addItem, cart, loading: cartLoading } = useCartContext();
-  const [isAdding, setIsAdding] = useState(false);
+  const { items, loading: cartStateLoading } = useCart();
+
+  // Cart Actions con callbacks personalizados
+  const {
+    addToCart: addToCartAction,
+    updateQuantity: updateQuantityAction,
+    removeFromCart: removeFromCartAction,
+    loading: cartActionLoading,
+  } = useCartActions(
+    (message) => toast.success(message),
+    (error) => toast.error(error)
+  );
+
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+
+  const loading = cartStateLoading || cartActionLoading;
 
   /**
    * Verifica si un producto está en el carrito
    */
-  const isProductInCart = useCallback((productId) => {
-    if (!cart || !cart.items) return false;
-    return cart.items.some(item => item.product._id === productId);
-  }, [cart]);
+  const isProductInCart = useCallback(
+    (productId) => {
+      if (!items || items.length === 0) return false;
+      return items.some((item) => item.product?._id === productId);
+    },
+    [items]
+  );
 
   /**
    * Obtiene la cantidad de un producto en el carrito
    */
-  const getProductQuantity = useCallback((productId) => {
-    if (!cart || !cart.items) return 0;
-    const item = cart.items.find(item => item.product._id === productId);
-    return item ? item.quantity : 0;
-  }, [cart]);
+  const getProductQuantity = useCallback(
+    (productId) => {
+      if (!items || items.length === 0) return 0;
+      const item = items.find((item) => item.product?._id === productId);
+      return item?.quantity || 0;
+    },
+    [items]
+  );
 
   /**
-   * Agregar producto al carrito
-   * @param {Object} product - Producto completo o solo ID
-   * @param {number} quantity - Cantidad (default: 1)
-   * @param {Object} attributes - Atributos opcionales (size, color, etc.)
-   * @param {Object} options - Opciones adicionales
+   * Obtiene el item completo del carrito para un producto
    */
-  const addProductToCart = useCallback(async (product, quantity = 1, attributes = {}, options = {}) => {
-    const {
-      showToast = true,
-      redirectToCart = false,
-      onSuccess,
-      onError
-    } = options;
+  const getCartItem = useCallback(
+    (productId) => {
+      if (!items || items.length === 0) return null;
+      return items.find((item) => item.product?._id === productId) || null;
+    },
+    [items]
+  );
 
-    // Verificar autenticación
-    if (!isAuthenticated) {
-      toast.error('Debes iniciar sesión para agregar productos al carrito', {
-        duration: 3000,
-        position: 'bottom-right'
-      });
-      navigate('/auth/login', { state: { from: window.location.pathname } });
-      return null;
-    }
-
-    // Validar producto
-    const productId = product._id || product;
-    if (!productId) {
-      toast.error('Producto inválido');
-      return null;
-    }
-
-    // Validar stock (si el producto tiene la info)
-    if (product.trackQuantity && product.stock !== undefined) {
-      if (product.stock <= 0) {
-        toast.error('Producto sin stock disponible', {
-          duration: 3000,
-          position: 'bottom-right'
-        });
-        return null;
-      }
-
-      if (quantity > product.stock) {
-        toast.error(`Solo hay ${product.stock} unidades disponibles`, {
-          duration: 3000,
-          position: 'bottom-right'
-        });
-        return null;
-      }
-    }
-
-    try {
-      setIsAdding(true);
-
-      const result = await addItem({
-        productId,
-        quantity,
-        attributes
-      });
-
-      if (result?.success) {
-        if (showToast) {
-          toast.success('✅ Producto agregado al carrito', {
-            duration: 2000,
-            position: 'bottom-right',
-            icon: '🛒'
-          });
-        }
-
-        if (onSuccess) {
-          onSuccess(result);
-        }
-
-        if (redirectToCart) {
-          navigate('/carrito');
-        }
-
-        return result;
-      }
-
-      throw new Error(result?.message || 'Error al agregar al carrito');
-    } catch (error) {
-      const errorMessage = error.response?.data?.message || error.message;
-      
-      if (showToast) {
-        toast.error(errorMessage, {
-          duration: 3000,
-          position: 'bottom-right'
-        });
-      }
-
-      if (onError) {
-        onError(error);
-      }
-
-      return null;
-    } finally {
-      setIsAdding(false);
-    }
-  }, [isAuthenticated, navigate, addItem]);
+  // ============================================================================
+  // ACCIONES
+  // ============================================================================
 
   /**
-   * Incrementar cantidad de un producto ya en el carrito
+   * Agregar producto al carrito con validaciones
+   * @param {Object} product - Producto completo
+   * @param {number} quantity - Cantidad a agregar
+   * @param {Object} attributes - Atributos opcionales (size, color, etc)
    */
-  const incrementQuantity = useCallback(async (product) => {
-    const productId = product._id || product;
-    const currentQuantity = getProductQuantity(productId);
+  const addProductToCart = useCallback(
+    async (product, quantity = 1, attributes = {}) => {
+    
+      // Validación: Producto disponible
+      if (!isProductAvailable(product)) {
+        toast.error('Producto no disponible');
+        return false;
+      }
 
-    if (currentQuantity === 0) {
+      // Validación: Stock suficiente
+      if (product.trackQuantity && quantity > product.stock) {
+        toast.error(`Solo hay ${product.stock} unidades disponibles`);
+        return false;
+      }
+
+      try {
+        await addToCartAction({
+          productId: product._id,
+          quantity,
+          attributes,
+        });
+        return true;
+      } catch (error) {
+        console.error('[useProductCart] Error adding to cart:', error);
+        return false;
+      }
+    },
+    [isAuthenticated, addToCartAction]
+  );
+
+  /**
+   * Actualizar cantidad de producto en carrito
+   * @param {string} productId - ID del producto
+   * @param {number} newQuantity - Nueva cantidad
+   * @param {Object} attributes - Atributos del item
+   */
+  const updateProductQuantity = useCallback(
+    async (productId, newQuantity, attributes = {}) => {
+      if (newQuantity < 1) {
+        toast.error('La cantidad debe ser mayor a 0');
+        return false;
+      }
+
+      try {
+        await updateQuantityAction(productId, newQuantity, attributes);
+        return true;
+      } catch (error) {
+        console.error('[useProductCart] Error updating quantity:', error);
+        return false;
+      }
+    },
+    [updateQuantityAction]
+  );
+
+  /**
+   * Remover producto del carrito
+   * @param {string} productId - ID del producto
+   * @param {Object} attributes - Atributos del item
+   */
+  const removeProductFromCart = useCallback(
+    async (productId, attributes = {}) => {
+      try {
+        await removeFromCartAction(productId, attributes);
+        return true;
+      } catch (error) {
+        console.error('[useProductCart] Error removing from cart:', error);
+        return false;
+      }
+    },
+    [removeFromCartAction]
+  );
+
+  /**
+   * Incrementar cantidad de producto
+   * @param {Object} product - Producto completo
+   */
+  const incrementQuantity = useCallback(
+    async (product) => {
+      const currentQuantity = getProductQuantity(product._id);
+      const newQuantity = currentQuantity + 1;
+
+      // Validar stock
+      if (product.trackQuantity && newQuantity > product.stock) {
+        toast.error(`Solo hay ${product.stock} unidades disponibles`);
+        return false;
+      }
+
+      return updateProductQuantity(product._id, newQuantity);
+    },
+    [getProductQuantity, updateProductQuantity]
+  );
+
+  /**
+   * Decrementar cantidad de producto
+   * @param {string} productId - ID del producto
+   */
+  const decrementQuantity = useCallback(
+    async (productId) => {
+      const currentQuantity = getProductQuantity(productId);
+
+      if (currentQuantity <= 1) {
+        // Si es 1, remover en lugar de decrementar
+        return removeProductFromCart(productId);
+      }
+
+      return updateProductQuantity(productId, currentQuantity - 1);
+    },
+    [getProductQuantity, updateProductQuantity, removeProductFromCart]
+  );
+
+  /**
+   * Agregar rápido (1 unidad) con validaciones automáticas
+   * @param {Object} product - Producto completo
+   */
+  const quickAddToCart = useCallback(
+    async (product) => {
+      // Si ya está en carrito, incrementar
+      if (isProductInCart(product._id)) {
+        return incrementQuantity(product);
+      }
+
+      // Si no está, agregar
       return addProductToCart(product, 1);
-    }
+    },
+    [isProductInCart, incrementQuantity, addProductToCart]
+  );
 
-    return addProductToCart(product, currentQuantity + 1, {}, {
-      showToast: true
-    });
-  }, [addProductToCart, getProductQuantity]);
-
-  /**
-   * Quick add - agregar y redirigir al carrito
-   */
-  const quickAddToCart = useCallback(async (product, quantity = 1, attributes = {}) => {
-    return addProductToCart(product, quantity, attributes, {
-      redirectToCart: true
-    });
-  }, [addProductToCart]);
-
-  /**
-   * Silent add - agregar sin toast ni redirección
-   */
-  const silentAddToCart = useCallback(async (product, quantity = 1, attributes = {}) => {
-    return addProductToCart(product, quantity, attributes, {
-      showToast: false,
-      redirectToCart: false
-    });
-  }, [addProductToCart]);
+  // ============================================================================
+  // RETURN
+  // ============================================================================
 
   return {
-    // Acciones
-    addProductToCart,
-    quickAddToCart,
-    silentAddToCart,
-    incrementQuantity,
+    // Estados
+    loading,
+    isAuthenticated,
 
-    // Queries
+    // Verificadores
     isProductInCart,
     getProductQuantity,
+    getCartItem,
 
-    // Estado
-    isAdding: isAdding || cartLoading,
-    loading: isAdding || cartLoading
+    // Acciones principales
+    addProductToCart,
+    updateProductQuantity,
+    removeProductFromCart,
+    quickAddToCart,
+
+    // Acciones auxiliares
+    incrementQuantity,
+    decrementQuantity,
   };
 };
 

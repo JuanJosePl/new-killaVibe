@@ -137,7 +137,7 @@ export function AuthProvider({ children }) {
     try {
       const response = await authAPI.login(credentials);
       
-      // ✅ Respuesta exitosa: { success: true, data: { token, refreshToken, user } }
+      // Respuesta exitosa: { success: true, data: { token, refreshToken, user } }
       if (response.success && response.data) {
         const authData = {
           user: response.data.user,
@@ -146,6 +146,16 @@ export function AuthProvider({ children }) {
         };
         
         updateAuthState(authData);
+
+        // NUEVO: Importar dinámicamente syncManager (evita circular dependency)
+        setTimeout(async () => {
+          try {
+            const { syncGuestDataToUser } = await import('../../core/utils/syncManager');
+            await syncGuestDataToUser({ silent: false });
+          } catch (error) {
+            console.error('[AuthProvider] Error en sincronización:', error);
+          }
+        }, 500);
         
         return { 
           success: true, 

@@ -1,450 +1,308 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-} from "react";
-import * as cartAPI from "../api/cart.api";
-import { CART_CACHE_CONFIG } from "../types/cart.types";
-import { isCartEmpty, calculateItemCount } from "../utils/cartHelpers";
-import { useAuth } from "../../../core/providers/AuthProvider";
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import * as cartAPI from '../api/cart.api';
+import { CART_CACHE_CONFIG } from '../types/cart.types';
+import { isCartEmpty, calculateItemCount } from '../utils/cartHelpers';
 
 const CartContext = createContext(null);
 
 export const useCartContext = () => {
   const context = useContext(CartContext);
   if (!context) {
-    throw new Error("useCartContext debe usarse dentro de CartProvider");
+    throw new Error('useCartContext debe usarse dentro de CartProvider');
   }
   return context;
 };
 
-/**
- * ✅ CORRECCIÓN: Provider optimizado sin loops ni llamadas duplicadas
- */
 export const CartProvider = ({ children }) => {
-  const { token, isAuthenticated } = useAuth();
-
   // ============================================================================
-  // STATE
+  // ESTADO
   // ============================================================================
-  const [cart, setCart] = useState(null);
+  const [cart, setCart] = useState({ items: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
-
-  // Caché
-  const [cache, setCache] = useState({
-    data: null,
-    timestamp: null,
-  });
-
-  // ✅ PROTECCIÓN: Refs
-  const fetchInProgressRef = useRef(false);
-  const mountedRef = useRef(true);
-  const initializedOnceRef = useRef(false);
+  const [cache, setCache] = useState({ data: null, timestamp: null });
 
   // ============================================================================
-  // CACHE HELPERS
+  // HELPERS INTERNOS
   // ============================================================================
+
   const isCacheValid = useCallback(() => {
     if (!cache.data || !cache.timestamp) return false;
-    const now = Date.now();
-    return now - cache.timestamp < CART_CACHE_CONFIG.TTL;
+    return (Date.now() - cache.timestamp) < CART_CACHE_CONFIG.TTL;
   }, [cache]);
 
   const updateCache = useCallback((data) => {
-    setCache({
-      data,
-      timestamp: Date.now(),
-    });
+    setCache({ data, timestamp: Date.now() });
   }, []);
 
   const clearCache = useCallback(() => {
-    setCache({
-      data: null,
-      timestamp: null,
-    });
+    setCache({ data: null, timestamp: null });
   }, []);
 
-  // ============================================================================
-  // FETCH CART - ✅ OPTIMIZADO
-  // ============================================================================
-  const fetchCart = useCallback(
-    async (forceRefresh = false) => {
-      // ✅ GUARD 1: No fetch sin auth
-      if (!token) {
-        setCart(null);
-        setInitialized(true);
-        return null;
-      }
+  // Helper para calcular totales localmente (Modo Invitado)
+  const calculateLocalCartTotals = (items) => {
+    const total = items.reduce((acc, item) => {
+      const price = Number(item.product?.price || item.price || 0);
+      const qty = Number(item.quantity || 0);
+      return acc + (price * qty);
+    }, 0);
+    return { items, total };
+  };
 
-      // ✅ GUARD 2: Prevenir fetch simultáneo
-      if (fetchInProgressRef.current) {
-        console.log("[CartContext] Fetch ya en progreso, ignorando...");
-        return cart;
-      }
+  // ============================================================================
+  // OPERACIONES CRUD
+  // ============================================================================
 
-      // ✅ GUARD 3: Usar caché si es válido
+  const fetchCart = useCallback(async (forceRefresh = false) => {
+    const auth = localStorage.getItem('killavibes_auth');
+
+    if (!auth) {
+      const saved = localStorage.getItem('killavibes_cart_guest');
+      const cartData = saved ? calculateLocalCartTotals(JSON.parse(saved)) : { items: [], total: 0 };
+      setCart(cartData);
+      setInitialized(true);
+      return cartData;
+    }
+
+    try {
       if (!forceRefresh && isCacheValid()) {
-        console.log("[CartContext] Usando caché válido");
         setCart(cache.data);
         return cache.data;
       }
 
-      fetchInProgressRef.current = true;
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await cartAPI.getCart();
-
-        if (!mountedRef.current) return null;
-
-        if (response?.success) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response.data;
-        }
-      } catch (err) {
-        if (!mountedRef.current) return null;
-
-        // ✅ No mostrar error para 401
-        if (err.response?.status === 401) {
-          setCart(null);
-          return null;
-        }
-
-        const errorMessage =
-          err.response?.data?.message || "Error al cargar el carrito";
-        setError(errorMessage);
-        console.error("[CartContext] Error fetching cart:", err);
-
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-          setInitialized(true);
-        }
-        fetchInProgressRef.current = false;
+      setLoading(true);
+      const response = await cartAPI.getCart();
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response.data;
       }
-    },
-    [token, isCacheValid, updateCache, cache.data, cart]
-  );
-
-  const addItem = useCallback(
-    async (itemData) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
+    } catch (err) {
+      if (err.response?.status === 401) {
+        setCart({ items: [], total: 0 });
+      } else {
+        setError(err.response?.data?.message || 'Error al cargar el carrito');
       }
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await cartAPI.addToCart(itemData);
-
-        if (response?.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-
-        return null;
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al agregar producto";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error adding item:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-    [token, updateCache]
-  );
-
-  const updateItem = useCallback(
-    async (productId, updateData) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
-      }
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await cartAPI.updateCartItem(productId, updateData);
-
-        if (response.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al actualizar cantidad";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error updating item:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-    [token, updateCache]
-  );
-
-  const removeItem = useCallback(
-    async (productId, attributes = {}) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
-      }
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await cartAPI.removeFromCart(productId, attributes);
-
-        if (response.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al eliminar producto";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error removing item:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-    [token, updateCache]
-  );
-
-  const clearCartItems = useCallback(async () => {
-    if (!token) {
-      console.warn("[CartContext] Usuario no autenticado");
-      return null;
+    } finally {
+      setLoading(false);
+      setInitialized(true);
     }
+  }, [isCacheValid, cache.data, updateCache]);
+
+  const addItem = useCallback(async (productData, quantity = 1) => {
+    if (!productData) return;
+    const productId = productData._id || productData.id || productData.productId;
+    const auth = localStorage.getItem('killavibes_auth');
+
+    if (!auth) {
+      setLoading(true);
+      try {
+        const saved = localStorage.getItem('killavibes_cart_guest');
+        let currentItems = saved ? JSON.parse(saved) : [];
+        if (!Array.isArray(currentItems)) currentItems = [];
+
+        const existingIdx = currentItems.findIndex(i => (i.product?._id === productId || i.product?.id === productId));
+
+        if (existingIdx > -1) {
+          currentItems[existingIdx].quantity += quantity;
+        } else {
+          currentItems.push({
+            product: {
+              _id: productId,
+              name: productData.name || 'Producto',
+              price: Number(productData.price) || 0,
+              images: productData.images || (productData.image ? [productData.image] : []),
+              slug: productData.slug || ''
+            },
+            quantity,
+            price: Number(productData.price) || 0
+          });
+        }
+
+        const updatedCart = calculateLocalCartTotals(currentItems);
+        localStorage.setItem('killavibes_cart_guest', JSON.stringify(updatedCart.items));
+        setCart(updatedCart);
+        updateCache(updatedCart);
+        return { success: true, data: updatedCart };
+      } finally {
+        setLoading(false);
+      }
+    }
+
     try {
       setLoading(true);
-      setError(null);
-
-      const response = await cartAPI.clearCart();
-
-      if (response.success && mountedRef.current) {
+      const response = await cartAPI.addToCart({ productId, quantity });
+      if (response.success) {
         setCart(response.data);
         updateCache(response.data);
         return response;
       }
     } catch (err) {
-      const errorMessage =
-        err.response?.data?.message || "Error al vaciar carrito";
-      if (mountedRef.current) {
-        setError(errorMessage);
-      }
-      console.error("[CartContext] Error clearing cart:", err);
-      return null;
+      setError(err.response?.data?.message || 'Error al agregar');
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
-  }, [token, updateCache]);
+  }, [updateCache]);
 
-  const applyCoupon = useCallback(
-    async (code) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
+  const updateItem = useCallback(async (productId, updateData) => {
+    const auth = localStorage.getItem('killavibes_auth');
+
+    if (!auth) {
+      const saved = localStorage.getItem('killavibes_cart_guest');
+      let currentItems = saved ? JSON.parse(saved) : [];
+      const idx = currentItems.findIndex(i => i.product?._id === productId);
+
+      if (idx > -1) {
+        currentItems[idx].quantity = Number(updateData.quantity);
+        const updatedCart = calculateLocalCartTotals(currentItems);
+        localStorage.setItem('killavibes_cart_guest', JSON.stringify(updatedCart.items));
+        setCart(updatedCart);
+        updateCache(updatedCart);
+        return { success: true, data: updatedCart };
       }
-      try {
-        setLoading(true);
-        setError(null);
+      return;
+    }
 
-        const response = await cartAPI.applyCoupon(code);
-
-        if (response.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al aplicar cupón";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error applying coupon:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+    try {
+      setLoading(true);
+      const response = await cartAPI.updateCartItem(productId, updateData);
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
       }
-    },
-    [token, updateCache]
-  );
+    } catch (err) {
+      setError('Error al actualizar');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
 
-  const updateShippingAddress = useCallback(
-    async (addressData) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
+  const removeItem = useCallback(async (productId) => {
+    const auth = localStorage.getItem('killavibes_auth');
+
+    if (!auth) {
+      const saved = localStorage.getItem('killavibes_cart_guest');
+      const currentItems = saved ? JSON.parse(saved) : [];
+      const filteredItems = currentItems.filter(item => item.product?._id !== productId);
+      const updatedCart = calculateLocalCartTotals(filteredItems);
+
+      localStorage.setItem('killavibes_cart_guest', JSON.stringify(updatedCart.items));
+      setCart(updatedCart);
+      updateCache(updatedCart);
+      return { success: true, data: updatedCart };
+    }
+
+    try {
+      setLoading(true);
+      const response = await cartAPI.removeFromCart(productId);
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
       }
-      try {
-        setLoading(true);
-        setError(null);
+    } catch (err) {
+      setError('Error al eliminar');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
 
-        const response = await cartAPI.updateShippingAddress(addressData);
+  const clearCartItems = useCallback(async () => {
+    const auth = localStorage.getItem('killavibes_auth');
+    if (!auth) {
+      localStorage.removeItem('killavibes_cart_guest');
+      const emptyCart = { items: [], total: 0 };
+      setCart(emptyCart);
+      updateCache(emptyCart);
+      return { success: true };
+    }
 
-        if (response.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al actualizar dirección";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error updating address:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+    try {
+      setLoading(true);
+      const response = await cartAPI.clearCart();
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
       }
-    },
-    [token, updateCache]
-  );
+    } catch (err) {
+      setError('Error al vaciar');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
 
-  const updateShippingMethod = useCallback(
-    async (shippingData) => {
-      if (!token) {
-        console.warn("[CartContext] Usuario no autenticado");
-        return null;
+  const applyCoupon = useCallback(async (code) => {
+    try {
+      setLoading(true);
+      const response = await cartAPI.applyCoupon(code);
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
       }
-      try {
-        setLoading(true);
-        setError(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Cupón inválido');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
 
-        const response = await cartAPI.updateShippingMethod(shippingData);
-
-        if (response.success && mountedRef.current) {
-          setCart(response.data);
-          updateCache(response.data);
-          return response;
-        }
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message || "Error al actualizar método de envío";
-        if (mountedRef.current) {
-          setError(errorMessage);
-        }
-        console.error("[CartContext] Error updating shipping method:", err);
-        return null;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
+  const updateShippingAddress = useCallback(async (addressData) => {
+    try {
+      setLoading(true);
+      const response = await cartAPI.updateShippingAddress(addressData);
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
       }
-    },
-    [token, updateCache]
-  );
+    } catch (err) {
+      setError('Error en dirección');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
+
+  const updateShippingMethod = useCallback(async (shippingData) => {
+    try {
+      setLoading(true);
+      const response = await cartAPI.updateShippingMethod(shippingData);
+      if (response.success) {
+        setCart(response.data);
+        updateCache(response.data);
+        return response;
+      }
+    } catch (err) {
+      setError('Error en método envío');
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
 
   // ============================================================================
-  // HELPERS
+  // HELPERS DE VISTA
   // ============================================================================
-  const refreshCart = useCallback(() => {
-    return fetchCart(true);
+  const refreshCart = useCallback(() => fetchCart(true), [fetchCart]);
+  
+  const getItemCount = useCallback(() => {
+    if (!cart?.items) return 0;
+    return cart.items.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  }, [cart]);
+
+  const isEmpty = useCallback(() => isCartEmpty(cart), [cart]);
+
+  useEffect(() => {
+    fetchCart();
   }, [fetchCart]);
 
-  const getItemCount = useCallback(() => {
-    if (!cart || !cart.items) return 0;
-    return calculateItemCount(cart.items);
-  }, [cart]);
-
-  const isEmpty = useCallback(() => {
-    return isCartEmpty(cart);
-  }, [cart]);
-
-  // ============================================================================
-  // INITIALIZATION - ✅ SOLO UNA VEZ
-  // ============================================================================
-  useEffect(() => {
-    mountedRef.current = true;
-
-    // ✅ GUARD: Solo inicializar una vez
-    if (initializedOnceRef.current) {
-      console.log("[CartContext] Ya inicializado, ignorando...");
-      return;
-    }
-
-    initializedOnceRef.current = true;
-
-    if (!isAuthenticated) {
-      setCart(null);
-      setInitialized(true);
-      clearCache();
-      return;
-    }
-
-    console.log("[CartContext] Inicializando por primera vez...");
-
-    // ✅ Delay mínimo
-    const timer = setTimeout(() => {
-      if (mountedRef.current) {
-        fetchCart(false);
-      }
-    }, 150);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-    };
-  }, []); // ✅ ARRAY VACÍO
-
-  // ============================================================================
-  // REACT TO AUTH CHANGES - ✅ SIN DEPENDENCIAS CIRCULARES
-  // ============================================================================
-  useEffect(() => {
-    // Solo limpiar si cambia auth después de inicialización
-    if (initializedOnceRef.current && !isAuthenticated) {
-      setCart(null);
-      clearCache();
-    }
-  }, [isAuthenticated]); // ✅ Solo auth
-
-  // ============================================================================
-  // VALUE
-  // ============================================================================
   const value = {
     cart,
     loading,
     error,
     initialized,
-
     fetchCart,
     addItem,
     updateItem,
@@ -453,13 +311,11 @@ export const CartProvider = ({ children }) => {
     applyCoupon,
     updateShippingAddress,
     updateShippingMethod,
-
     refreshCart,
     getItemCount,
     isEmpty,
     clearCache,
-
-    setError: (err) => setError(err),
+    setError: (err) => setError(err)
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

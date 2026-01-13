@@ -95,47 +95,56 @@ export function HeroSection() {
   // FETCH FEATURED PRODUCTS
   // ==========================================================================
   
-  useEffect(() => {
-    let isMounted = true;
+ useEffect(() => {
+  let isMounted = true;
 
-    const fetchFeaturedProducts = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const fetchFeaturedProducts = async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-        // Usar API real del proyecto
-        const response = await productsAPI.getProducts({
-          featured: true,
-          limit: 4,
-          status: 'active',
-          visibility: 'public',
-          sort: 'createdAt',
-          order: 'desc',
-        });
+    const response = await productsAPI.getProducts({
+      featured: true,
+      limit: 4,
+      status: 'active',
+      visibility: 'public',
+      sort: 'createdAt',
+      order: 'desc',
+    });
 
-        if (isMounted && response.success && response.data) {
-          setFeaturedProducts(response.data.slice(0, 4));
-        } else {
-          throw new Error(response.message || 'Error al cargar productos');
-        }
-      } catch (err) {
-        console.error('[HeroSection] Error fetching featured products:', err);
-        if (isMounted) {
-          setError(err.message || 'Error al cargar productos destacados');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
+    // --- CORRECCIÓN AQUÍ ---
+    // 1. Extraemos la data sin importar si viene en .data o directa
+    const data = response.data || response;
 
-    fetchFeaturedProducts();
+    // 2. Si hay datos y es un array, es un ÉXITO, no importa lo demás
+    if (isMounted && (Array.isArray(data) || response.success)) {
+      const finalProducts = Array.isArray(data) ? data : (data.products || []);
+      setFeaturedProducts(finalProducts.slice(0, 4));
+    } 
+    // 3. Solo lanzamos error si NO hay datos de verdad
+    else if (isMounted) {
+      throw new Error(response.message || 'No se encontraron productos');
+    }
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  } catch (err) {
+    // Si el error dice "Exitosamente", lo ignoramos para no ensuciar la consola
+    if (err.message?.includes('exitosamente')) return;
+
+    console.error('[HeroSection] Error fetching featured products:', err);
+    if (isMounted) {
+      setError(err.message || 'Error al cargar productos destacados');
+    }
+  } finally {
+    if (isMounted) setLoading(false);
+  }
+};
+
+  fetchFeaturedProducts();
+
+  return () => {
+    isMounted = false;
+  };
+}, []);
 
   // ==========================================================================
   // AUTO-SLIDE CAROUSEL

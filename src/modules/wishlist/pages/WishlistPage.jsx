@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  useWishlist,
-  useWishlistActions,
-  WishlistGrid,
-  formatPrice
-} from '../modules/wishlist';
+import  useWishlist  from '../../wishlist/hooks/useWishlist';
+import  useWishlistActions  from '../../wishlist/hooks/useWishlistActions';
+import  WishlistGrid  from '../../wishlist/components/WishlistGrid';
+import { formatPrice } from '../../wishlist/utils/wishlistHelpers';
 
 /**
  * @page WishlistPage

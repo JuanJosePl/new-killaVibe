@@ -98,11 +98,6 @@ export const useProductWishlist = () => {
    */
   const addProductToWishlist = useCallback(
     async (product, notifyPriceChange = true, notifyAvailability = true) => {
-      // Validación: Usuario autenticado
-      if (!isAuthenticated) {
-        toast.warning('Debes iniciar sesión para agregar a favoritos');
-        return false;
-      }
 
       // Validación: Ya está en wishlist
       if (isProductInWishlist(product._id)) {
@@ -148,11 +143,6 @@ export const useProductWishlist = () => {
    */
   const toggleProductWishlist = useCallback(
     async (product) => {
-      // Validación: Usuario autenticado
-      if (!isAuthenticated) {
-        toast.warning('Debes iniciar sesión para agregar a favoritos');
-        return false;
-      }
 
       const inWishlist = isProductInWishlist(product._id);
 

@@ -3,7 +3,8 @@
 import axios from 'axios';
 
 /**
- * ✅ CORRECCIÓN: Interceptor mejorado con mejor manejo de errores
+ * ✅ CORRECCIÓN: Interceptor mejorado con manejo de errores robusto
+ * Evita el error "Cannot convert object to primitive value" y bucles de redirección.
  */
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'https://backend-vibeskilla.onrender.com/api';
@@ -67,7 +68,6 @@ axiosInstance.interceptors.request.use(
       config.headers.Authorization = `Bearer ${authData.token}`;
     }
     
-    // ✅ Log solo en desarrollo
     if (import.meta.env.DEV) {
       console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`);
     }
@@ -75,7 +75,6 @@ axiosInstance.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('[axiosInstance] Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -83,23 +82,19 @@ axiosInstance.interceptors.request.use(
 /**
  * @interceptor response
  * @description Maneja respuestas y errores globalmente
- * ✅ CORRECCIÓN: Mejor estructura de errores
  */
 axiosInstance.interceptors.response.use(
   (response) => {
-    // ✅ Log solo en desarrollo
     if (import.meta.env.DEV) {
       console.log(`[API Response] ${response.config.url} → ${response.status}`);
     }
-    
-    // Retornar data directamente
     return response.data;
   },
   async (error) => {
     const originalRequest = error.config;
 
     // ============================================================================
-    // MANEJO DE 401 - TOKEN EXPIRADO
+    // MANEJO DE 401 - TOKEN EXPIRADO / INVÁLIDO
     // ============================================================================
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -108,12 +103,9 @@ axiosInstance.interceptors.response.use(
         const authData = getStoredAuth();
         
         if (!authData || !authData.refreshToken) {
-          throw new Error('No refresh token available');
+          throw new Error('No hay refresh token disponible');
         }
 
-        console.log('[axiosInstance] Intentando refrescar token...');
-
-        // Intentar refrescar el token
         const response = await axios.post(
           `${BASE_URL}/auth/refresh-token`,
           { refreshToken: authData.refreshToken }
@@ -122,45 +114,34 @@ axiosInstance.interceptors.response.use(
         if (response.data.success && response.data.data.token) {
           const newToken = response.data.data.token;
           
-          // Actualizar el token en localStorage
           const updatedAuthData = {
             ...authData,
             token: newToken
           };
           saveStoredAuth(updatedAuthData);
           
-          console.log('[axiosInstance] Token refrescado exitosamente');
-          
-          // Reintentar request original con nuevo token
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return axiosInstance(originalRequest);
         }
       } catch (refreshError) {
-        console.error('[axiosInstance] Token refresh failed:', refreshError);
         clearStoredAuth();
         
-        // Redirigir a login
-        if (typeof window !== 'undefined') {
+        // Redirigir solo si no estamos ya en el login para evitar bucles
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
           window.location.href = '/auth/login';
         }
         
-        return Promise.reject(refreshError);
+        // Retornar error real
+        const finalRefreshError = new Error('Sesión expirada');
+        return Promise.reject(finalRefreshError);
       }
     }
 
     // ============================================================================
-    // FORMATEAR ERROR - ✅ CORRECCIÓN
+    // FORMATEAR ERROR FINAL (Evita "Object to Primitive" error)
     // ============================================================================
     
-    // ✅ Mantener la estructura original de axios
-    const formattedError = {
-      ...error,
-      message: error.response?.data?.message || error.message || 'Error desconocido',
-      statusCode: error.response?.status || 500,
-      success: false,
-    };
-
-    // ✅ Log solo en desarrollo (excepto 401)
+    // Log de error en desarrollo
     if (import.meta.env.DEV && error.response?.status !== 401) {
       console.error(
         `[API Error] ${originalRequest?.method?.toUpperCase()} ${originalRequest?.url}`,
@@ -169,11 +150,16 @@ axiosInstance.interceptors.response.use(
       );
     }
 
-    return Promise.reject({
-  message: error.response?.data?.message || error.message || 'Error desconocido',
-  statusCode: error.response?.status || 500,
-  success: false,
-  data: error.response?.data || null,
-})});
+    // ✅ REEMPLAZO PUNTUAL: Creamos una instancia de Error legítima
+    const errorToReturn = new Error(error.response?.data?.message || error.message || 'Error desconocido');
+    
+    // Agregamos metadata útil para los componentes
+    errorToReturn.statusCode = error.response?.status || 500;
+    errorToReturn.data = error.response?.data || null;
+    errorToReturn.success = false;
+
+    return Promise.reject(errorToReturn);
+  }
+);
 
 export default axiosInstance;
