@@ -21,6 +21,7 @@ import CustomerProviders  from '../../modules/customer/providers/CustomerProvide
 // HOOKS
 // ============================================================================
 import { useScrollToTop } from '../hooks/useScroll';
+import WishlistPage from '../../modules/wishlist/pages/WishlistPage';
 
 /**
  * @component AppRouter
