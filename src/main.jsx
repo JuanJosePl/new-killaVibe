@@ -1,37 +1,18 @@
-// src/main.jsx
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import App from './App.jsx';
+
+// Estilos globales
 import './shared/styles/index.css';
 
-// ============================================================================
-// AUTH PROVIDER
-// ============================================================================
-import { AuthProvider } from './core/providers/AuthProvider';
+// Componente Principal
+import App from './App.jsx';
 
-/**
- * @file main.jsx
- * @description Entry point de la aplicación
- * 
- * ESTRUCTURA DE JERARQUÃA:
- * 
- * StrictMode
- *   └─> BrowserRouter (⚠️ ÃNICO - no duplicar)
- *       └─> AuthProvider (autenticación global)
- *           └─> App
- *               └─> ThemeProvider
- *                   └─> CartProvider
- *                       └─> WishlistProvider
- *                           └─> SearchProvider
- *                               └─> AppRouter
- *                                   └─> Routes
- * 
- * IMPORTANTE:
- * - BrowserRouter SOLO aquí (no en App.jsx ni AppRouter.jsx)
- * - AuthProvider debe envolver App para que todas las rutas tengan acceso
- * - Otros providers están en App.jsx
- */
+// Proveedores de Contexto
+import { AuthProvider } from './core/providers/AuthProvider';
+import { CartProvider } from './modules/cart/context/CartContext.jsx';
+import { ProductsProvider } from './modules/products/contexts/ProductsContext.jsx';
+import { WishlistProvider } from './modules/wishlist/context/WishlistContext.jsx';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -59,17 +40,14 @@ createRoot(document.getElementById('root')).render(
         Debe estar aquí para envolver TODO (incluyendo router)
       */}
       <AuthProvider>
-        
-        {/* 
-          ══════════════════════════════════════════════════════════════════════
-          APP COMPONENT
-          ══════════════════════════════════════════════════════════════════════
-          Contiene todos los demás providers y el router
-        */}
-        <App />
-        
+        <ProductsProvider>
+          <WishlistProvider>
+            <CartProvider>
+              <App />
+            </CartProvider>
+          </WishlistProvider>
+        </ProductsProvider>
       </AuthProvider>
-      
     </BrowserRouter>
   </StrictMode>
 );

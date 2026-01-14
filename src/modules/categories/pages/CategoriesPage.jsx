@@ -8,6 +8,7 @@ import {
   filterCategories,
   formatProductCount,
 } from '../utils/categoryHelpers';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * @page CategoriesPage

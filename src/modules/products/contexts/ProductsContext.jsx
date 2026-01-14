@@ -79,8 +79,8 @@ export const ProductsProvider = ({ children }) => {
         
         // Actualizar caché
         response.data?.forEach(product => {
-          productCache.set(product._id, product);
-        });
+          productCache.set(product._id, product);        });
+        return newCache;
         setProductCache(new Map(productCache));
       } else {
         setError(response.message || 'Error al cargar productos');
@@ -94,7 +94,6 @@ export const ProductsProvider = ({ children }) => {
       setLoading(false);
     }
   }, [globalFilters, productCache]);
-
   /**
    * Fetch productos destacados
    */
@@ -350,9 +349,11 @@ export const ProductsProvider = ({ children }) => {
   /**
    * Cargar productos destacados al montar
    */
-  useEffect(() => {
-    fetchFeaturedProducts();
-  }, [fetchFeaturedProducts]);
+useEffect(() => {
+  if (products.length === 0) {
+    fetchProducts(); // Función que trae todos los productos de la API
+  }
+}, []);
 
   // ========== VALOR DEL CONTEXTO ==========
   const value = {

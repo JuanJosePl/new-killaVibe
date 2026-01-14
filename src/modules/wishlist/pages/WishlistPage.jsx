@@ -290,7 +290,7 @@ const WishlistPage = () => {
                   ? 'Explora nuestros productos y guarda tus favoritos aquí'
                   : 'Intenta cambiar el filtro para ver otros productos',
                 actionText: filter === 'all' ? 'Explorar productos' : 'Ver todos',
-                onAction: filter === 'all' ? () => navigate('/products') : () => setFilter('all')
+                onAction: filter === 'all' ? () => navigate('/productos') : () => setFilter('all')
               }}
             />
           </>
@@ -304,7 +304,7 @@ const WishlistPage = () => {
               title: 'Tu lista de deseos está vacía',
               message: 'Explora nuestros productos y guarda tus favoritos aquí',
               actionText: 'Explorar productos',
-              onAction: () => navigate('/products'),
+              onAction: () => navigate('/productos'),
               icon: 'heart'
             }}
           />

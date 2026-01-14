@@ -256,9 +256,11 @@ const addItem = useCallback(async (itemData) => {
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = getItemCount(wishlist);
 
-const value = {
+  const value = {
     // Estado
     wishlist,
+    items,
+    summary,
     loading,
     error,
     initialized,
@@ -271,6 +273,7 @@ const value = {
     fetchWishlist,
     addItem,
     removeItem,
+    moveToCart, // ✅ ESTO FALTABA Y CAUSABA TU ERROR
     clearWishlistItems,
     checkProduct,
     moveToCart,

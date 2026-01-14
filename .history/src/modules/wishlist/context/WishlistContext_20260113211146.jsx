@@ -259,6 +259,8 @@ const addItem = useCallback(async (itemData) => {
 const value = {
     // Estado
     wishlist,
+    // items,     <-- ⚠️ Elimina o comenta estas si no las has definido arriba
+    // summary,   <-- ⚠️ Elimina o comenta estas si no las has definido arriba
     loading,
     error,
     initialized,
@@ -273,7 +275,7 @@ const value = {
     removeItem,
     clearWishlistItems,
     checkProduct,
-    moveToCart,
+    moveToCart, // ✅ Ahora aparece solo una vez
     getPriceChanges,
     refreshWishlist,
 
