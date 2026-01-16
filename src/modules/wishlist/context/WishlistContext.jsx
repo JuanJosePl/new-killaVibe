@@ -256,34 +256,40 @@ const addItem = useCallback(async (itemData) => {
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = getItemCount(wishlist);
 
-  const value = {
-    // Estado
-    wishlist,
-    items,
-    summary,
-    loading,
-    error,
-    initialized,
+const value = {
+  // =============================
+  // Estado
+  // =============================
+  wishlist,
+  loading,
+  error,
+  initialized,
 
-    // Helpers
-    isEmpty,
-    itemCount,
+  // =============================
+  // Helpers
+  // =============================
+  isEmpty,
+  itemCount,
 
-    // Acciones
-    fetchWishlist,
-    addItem,
-    removeItem,
-    moveToCart, // ✅ ESTO FALTABA Y CAUSABA TU ERROR
-    clearWishlistItems,
-    checkProduct,
-    moveToCart,
-    getPriceChanges,
-    refreshWishlist,
+  // =============================
+  // Acciones
+  // =============================
+  fetchWishlist,
+  addItem,
+  removeItem,
+  clearWishlistItems,
+  checkProduct,
+  moveToCart,
+  getPriceChanges,
+  refreshWishlist,
 
-    // Caché
-    clearCache,
-    setError
-  };
+  // =============================
+  // Caché / utils
+  // =============================
+  clearCache,
+  setError
+};
+
 
   return (
     <WishlistContext.Provider value={value}>
