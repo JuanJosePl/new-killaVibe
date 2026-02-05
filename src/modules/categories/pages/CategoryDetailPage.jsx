@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import useCategoryActions from "../hooks/useCategoryActions";
-import { productsAPI } from "../../products/api/products.api";
+import  productsAPI  from "../../products/api/products.api";
 import { ProductCard } from "../../products/components/ProductCard";
 import { useProductCart } from "../../products/hooks/useProductCart";
 import { useProductWishlist } from "../../products/hooks/useProductWishlist";
