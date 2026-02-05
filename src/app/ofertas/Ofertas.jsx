@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { ProductCard } from "../../modules/products/components/ProductCard";
 import { Badge } from "../../shared/components/ui/badge";
 import { Button } from "../../shared/components/ui/button";
-import { productsAPI } from "../../modules/products/api/products.api";
+import  productsAPI from "../../modules/products/api/products.api";
 import { useScrollToTop } from "../../core/hooks/useScroll";
 import { PageLayout } from "../../shared/components/feedback/components/page-layout";
 

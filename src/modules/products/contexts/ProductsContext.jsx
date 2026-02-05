@@ -6,7 +6,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import { productsAPI } from "../api/products.api";
+import  productsAPI  from "../api/products.api";
 import { validateProduct, validateStock } from "../schemas/product.schema";
 
 /**

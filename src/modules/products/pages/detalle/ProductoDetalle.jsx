@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
 // ============================================================================
 // APIs Y HOOKS
 // ============================================================================
-import { productsAPI } from "../../api/products.api";
+import  productsAPI  from "../../api/products.api";
 import { useState } from "react";
 
 // ============================================================================

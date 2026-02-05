@@ -4,7 +4,7 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 // ============================================================================
 // APIs Y HOOKS
 // ============================================================================
-import { productsAPI } from "../api/products.api";
+import  productsAPI  from "../api/products.api";
 
 // ============================================================================
 // UTILIDADES Y CONSTANTES

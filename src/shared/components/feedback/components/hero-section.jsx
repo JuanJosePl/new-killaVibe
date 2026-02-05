@@ -20,7 +20,7 @@ import { Link } from 'react-router-dom';
 // ============================================================================
 // HOOKS Y APIS DEL PROYECTO
 // ============================================================================
-import { productsAPI } from '../../../../modules/products/api/products.api';
+import  productsAPI  from '../../../../modules/products/api/products.api';
 import { formatPrice } from '../../../../modules/products/utils/priceHelpers';
 import { getPrimaryImage } from '../../../../modules/products/utils/productHelpers';
 
