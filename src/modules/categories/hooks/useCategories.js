@@ -1,35 +1,40 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { getCategories, searchCategories } from '../api/categories.api';
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getCategories, searchCategories } from "../api/categories.api";
 
 /**
  * @hook useCategories
  * @description Hook principal para gestionar categorías con cache y filtros
- * 
+ *
  * CARACTERÍSTICAS:
  * - Cache en memoria (5 min TTL)
  * - Filtros avanzados
  * - Paginación
  * - Búsqueda
  * - Auto-refresh
- * 
+ *
+ * ✅ CORRECCIONES APLICADAS:
+ * - withProductCount default TRUE (alineado con backend)
+ * - Pagination con defaults en catch (prevenir undefined)
+ * - Manejo robusto de response.data
+ *
  * @param {Object} options - Opciones del hook
  * @param {boolean} options.featured - Solo categorías destacadas
  * @param {boolean} options.parentOnly - Solo categorías raíz
- * @param {boolean} options.withProductCount - Incluir conteo de productos
+ * @param {boolean} options.withProductCount - Incluir conteo de productos (default: TRUE)
  * @param {string} options.sortBy - 'order'|'newest'|'views'|'name'|'productCount'
  * @param {number} options.initialPage - Página inicial
  * @param {number} options.pageSize - Items por página
  * @param {boolean} options.autoFetch - Auto fetch al montar (default: true)
  * @param {number} options.cacheTTL - TTL del cache en ms (default: 5min)
- * 
+ *
  * @returns {Object} Estado y métodos
  */
 const useCategories = (options = {}) => {
   const {
     featured = false,
     parentOnly = false,
-    withProductCount = false,
-    sortBy = 'order',
+    withProductCount = true, // ✅ CORREGIDO: TRUE por defecto (alineado con backend)
+    sortBy = "order",
     initialPage = 1,
     pageSize = 50,
     autoFetch = true,
@@ -71,20 +76,23 @@ const useCategories = (options = {}) => {
   /**
    * Verifica si el cache es válido
    */
-  const isCacheValid = useCallback((key) => {
-    if (!cache.current.data || !cache.current.timestamp) {
-      return false;
-    }
+  const isCacheValid = useCallback(
+    (key) => {
+      if (!cache.current.data || !cache.current.timestamp) {
+        return false;
+      }
 
-    if (cache.current.key !== key) {
-      return false;
-    }
+      if (cache.current.key !== key) {
+        return false;
+      }
 
-    const now = Date.now();
-    const elapsed = now - cache.current.timestamp;
+      const now = Date.now();
+      const elapsed = now - cache.current.timestamp;
 
-    return elapsed < cacheTTL;
-  }, [cacheTTL]);
+      return elapsed < cacheTTL;
+    },
+    [cacheTTL]
+  );
 
   /**
    * Actualiza el cache
@@ -111,73 +119,82 @@ const useCategories = (options = {}) => {
   /**
    * Obtener categorías con cache
    */
-  const fetchCategories = useCallback(async (params = {}, forceRefresh = false) => {
-    const queryParams = {
-      featured: params.featured ?? featured,
-      parentOnly: params.parentOnly ?? parentOnly,
-      withProductCount: params.withProductCount ?? withProductCount,
-      sortBy: params.sortBy ?? sortBy,
-      page: params.page ?? pagination.page,
-      limit: params.limit ?? pagination.limit,
-    };
+  const fetchCategories = useCallback(
+    async (params = {}, forceRefresh = false) => {
+      const queryParams = {
+        featured: params.featured ?? featured,
+        parentOnly: params.parentOnly ?? parentOnly,
+        withProductCount: params.withProductCount ?? withProductCount,
+        sortBy: params.sortBy ?? sortBy,
+        page: params.page ?? pagination.page,
+        limit: params.limit ?? pagination.limit,
+      };
 
-    const cacheKey = getCacheKey(queryParams);
+      const cacheKey = getCacheKey(queryParams);
 
-    // Usar cache si es válido y no es force refresh
-    if (!forceRefresh && isCacheValid(cacheKey)) {
-      const cached = cache.current.data;
-      setCategories(cached.data);
-      setPagination(cached.pagination);
-      return cached;
-    }
+      // Usar cache si es válido y no es force refresh
+      if (!forceRefresh && isCacheValid(cacheKey)) {
+        const cached = cache.current.data;
+        setCategories(cached.data);
+        setPagination(cached.pagination);
+        return cached;
+      }
 
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
 
-try {
-  const response = await getCategories(queryParams);
-  // console.log("Respuesta de la API:", response); // Revisa esto en la consola
-  
-  const dataArray = Array.isArray(response) ? response : (response?.data || []);
+      try {
+        const response = await getCategories(queryParams);
 
-  // SOLUCIÓN: Asegurar que data y pagination tengan valores por defecto
-  const result = {
-    data: dataArray, 
-    pagination: response?.pagination || { 
-      page: queryParams.page, 
-      limit: queryParams.limit, 
-      total: dataArray.length, 
-      pages: 1 
+        // ✅ CORREGIDO: Manejo robusto de response
+        const dataArray = Array.isArray(response)
+          ? response
+          : response?.data || [];
+
+        const result = {
+          data: dataArray,
+          pagination: response?.pagination || {
+            page: queryParams.page,
+            limit: queryParams.limit,
+            total: dataArray.length,
+            pages: Math.ceil(dataArray.length / queryParams.limit) || 1,
+          },
+        };
+
+        setCategories(result.data);
+        setPagination(result.pagination);
+        updateCache(cacheKey, result);
+
+        return result;
+      } catch (err) {
+        // ✅ CORREGIDO: Setear pagination con defaults para prevenir undefined
+        setCategories([]);
+        setPagination({
+          page: queryParams.page,
+          limit: queryParams.limit,
+          total: 0,
+          pages: 0,
+        });
+        setError(err.message || "Error al obtener categorías");
+
+        // No lanzar error para que el componente maneje el estado
+        console.error("[useCategories] Error:", err);
+      } finally {
+        setLoading(false);
+      }
     },
-  };
-
-  setCategories(result.data);
-  setPagination(result.pagination);
-  updateCache(cacheKey, result);
-
-  return result;
-} catch (err) {
-  // Si hay error, mantenemos la paginación coherente para que el componente no rompa
-  setCategories([]); 
-  // No dejes la paginación como undefined
- setError(err.message || 'Error al obtener categorías');
-  // Es recomendable no relanzar el error (throw err) si quieres que 
-  // la UI lo maneje mediante el estado 'error'
-} finally {
-  // ESTO ES LO MÁS IMPORTANTE: Desbloquea el estado de carga siempre.
-  setLoading(false);
-}
-  }, [
-    featured,
-    parentOnly,
-    withProductCount,
-    sortBy,
-    pagination.page,
-    pagination.limit,
-    getCacheKey,
-    isCacheValid,
-    updateCache,
-  ]);
+    [
+      featured,
+      parentOnly,
+      withProductCount,
+      sortBy,
+      pagination.page,
+      pagination.limit,
+      getCacheKey,
+      isCacheValid,
+      updateCache,
+    ]
+  );
 
   /**
    * Cambiar página
@@ -220,33 +237,48 @@ try {
   /**
    * Buscar categorías
    */
-  const search = useCallback(async (query) => {
-    if (!query || query.length < 2) {
-      setError('El término de búsqueda debe tener al menos 2 caracteres');
-      return;
-    }
+  const search = useCallback(
+    async (query) => {
+      if (!query || query.length < 2) {
+        setError("El término de búsqueda debe tener al menos 2 caracteres");
+        return;
+      }
 
-    setLoading(true);
+      setLoading(true);
+      setError(null);
 
-    try {
-      const response = await searchCategories(query);
+      try {
+        const response = await searchCategories(query);
 
-      const results = Array.isArray(response) ? response : (response?.data || []);
+        const results = Array.isArray(response)
+          ? response
+          : response?.data || [];
 
-      setCategories(results);
-      setPagination({
-        page: 1,
-        limit: results.length,
-        total: results.length,
-        pages: 1,
-      });
-      return results;
-    } catch (err) {
-      setError(err.message || 'Error en la búsqueda');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+        setCategories(results);
+        setPagination({
+          page: 1,
+          limit: results.length,
+          total: results.length,
+          pages: 1,
+        });
+
+        return results;
+      } catch (err) {
+        setError(err.message || "Error en la búsqueda");
+        setCategories([]);
+        setPagination({
+          page: 1,
+          limit: pageSize,
+          total: 0,
+          pages: 0,
+        });
+        console.error("[useCategories] Search error:", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pageSize]
+  );
 
   /**
    * Reiniciar filtros
@@ -266,7 +298,7 @@ try {
     if (autoFetch) {
       fetchCategories();
     }
-  }, [pagination.page, autoFetch, fetchCategories]); // Solo re-fetch cuando cambia la página
+  }, [pagination.page, autoFetch, fetchCategories]);
 
   // Computed values
   const isEmpty = categories.length === 0;
@@ -279,12 +311,12 @@ try {
     categories,
     category: categories[0] || null, // Primera categoría (útil para single fetch)
     count,
-    
+
     // Loading states
     loading,
     error,
     isEmpty,
-    
+
     // Pagination
     pagination,
     hasMore,
@@ -292,7 +324,7 @@ try {
     goToPage,
     nextPage,
     prevPage,
-    
+
     // Actions
     fetchCategories,
     search,

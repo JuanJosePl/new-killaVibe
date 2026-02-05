@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../core/hooks/useAuth";
+import { syncGuestDataToUser } from "@/core/utils/syncManager";
+
+import { useWishlistContext } from "../../wishlist/context/WishlistContext";
+import { syncGuestWishlistToUser } from "../../wishlist/utils/syncGuestWishlistToUser";
 
 /**
  * @hook useAuthActions
@@ -26,9 +30,12 @@ import { useAuth } from "../../../core/hooks/useAuth";
  * });
  */
 export const useAuthActions = (options = {}) => {
+  const { clearWishlist } = useWishlistContext();
+
   const { onSuccess, onError, redirectTo } = options;
 
   const { register, login, logout, updateProfile, user } = useAuth();
+
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
@@ -49,6 +56,21 @@ export const useAuthActions = (options = {}) => {
       const result = await register(userData);
 
       if (result.success) {
+        // 🆕 Sincronizar datos guest → user (post register)
+        try {
+          await syncGuestDataToUser({
+            syncWishlist: syncGuestWishlistToUser,
+            clearWishlist,
+            silent: false,
+            force: true,
+          });
+        } catch (error) {
+          console.error(
+            "[Auth] Error en sincronización post-register (no bloquea registro):",
+            error
+          );
+        }
+
         // Callback de éxito
         if (onSuccess) {
           onSuccess(result);
@@ -101,7 +123,23 @@ export const useAuthActions = (options = {}) => {
       const result = await login(credentials);
 
       if (result.success) {
-        window.dispatchEvent(new Event('auth-change'));
+        window.dispatchEvent(new Event("auth-change"));
+
+        // 🆕 Sincronizar datos guest → user (orquestado)
+        try {
+          await syncGuestDataToUser({
+            syncWishlist: syncGuestWishlistToUser,
+            clearWishlist,
+            silent: false,
+            force: true,
+          });
+        } catch (error) {
+          console.error(
+            "[Auth] Error en sincronización (no bloquea login):",
+            error
+          );
+        }
+
         // Callback de éxito
         if (onSuccess) {
           onSuccess(result);
@@ -111,7 +149,6 @@ export const useAuthActions = (options = {}) => {
         if (redirectTo) {
           navigate(redirectTo);
         } else {
-          // Redirección por defecto según rol
           redirectByRole(result.user);
         }
 

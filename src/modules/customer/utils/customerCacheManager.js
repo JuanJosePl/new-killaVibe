@@ -195,6 +195,8 @@ export const PRODUCT_CACHE_KEYS = {
   topSelling: () => "products:top-selling",
   related: (productId) => `products:related:${productId}`,
   search: (query) => `products:search:${query}`,
+    category: (categorySlug, filters = {}) =>
+    `products:category:${categorySlug}:${JSON.stringify(filters)}`
 };
 
 /**

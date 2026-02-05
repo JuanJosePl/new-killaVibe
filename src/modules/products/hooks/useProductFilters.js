@@ -6,6 +6,9 @@ import { DEFAULT_QUERY_PARAMS } from '../types/product.types';
  * @hook useProductFilters
  * @description Hook para manejo de filtros de productos con sincronización URL
  * @returns {Object} { filters, updateFilter, clearFilters, resetFilters }
+ * 
+ * ✅ FIX APLICADO:
+ * - Removida dependencia setSearchParams del useEffect para evitar re-renders innecesarios
  */
 export const useProductFilters = (initialFilters = {}) => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -73,7 +76,8 @@ export const useProductFilters = (initialFilters = {}) => {
   }, [initialFilters]);
 
   /**
-   * Sincroniza filtros con URL
+   * ✅ FIX: Sincroniza filtros con URL sin causar re-renders
+   * Removida dependencia setSearchParams
    */
   useEffect(() => {
     const params = new URLSearchParams();
@@ -85,7 +89,7 @@ export const useProductFilters = (initialFilters = {}) => {
     });
     
     setSearchParams(params, { replace: true });
-  }, [filters, setSearchParams]);
+  }, [filters]); // ✅ Solo filters como dependencia
 
   return {
     filters,

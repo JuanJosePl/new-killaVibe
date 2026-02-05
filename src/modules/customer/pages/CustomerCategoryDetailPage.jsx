@@ -1,309 +1,422 @@
 // src/modules/customer/pages/CustomerCategoryDetailPage.jsx
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import useCategories from "../hooks/useCategories";
-import useProducts from "../hooks/useProducts";
+import { useCustomerCategories } from "../context/CustomerCategoriesContext";
+import { useCustomerProducts } from "../context/CustomerProductsContext";
+import { useCustomerActivity } from "../context/CustomerActivityContext";
 import { useCustomerCart } from "../context/CustomerCartContext";
 import { useCustomerWishlist } from "../context/CustomerWishlistContext";
+import CategoryCard from "../components/categories/CategoryCard";
 import ProductGrid from "../components/products/ProductGrid";
 
 const CustomerCategoryDetailPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
 
-  const {
-    currentCategory,
-    breadcrumb,
-    loadCategoryDetails,
-    navigateToCategory,
-    navigateUp,
-    isLoading: categoryLoading,
-    error: categoryError,
-  } = useCategories();
-
-  const {
-    products,
-    pagination,
-    isLoading: productsLoading,
-    filterByCategory,
-    changeSort,
-    goToPage,
-    nextPage,
-    prevPage,
-  } = useProducts();
-
+  const { getCategoryBySlug } = useCustomerCategories();
+  const { getProductsByCategory, isLoading: productsLoading } =
+    useCustomerProducts();
+  const { trackCategoryView } = useCustomerActivity();
   const { addItem: addToCart, isInCart, getItemQuantity } = useCustomerCart();
-  const {
-    addItem: addToWishlist,
-    removeItem: removeFromWishlist,
-    isInWishlist,
-  } = useCustomerWishlist();
+  const { addItem: addToWishlist, isItemInWishlist } = useCustomerWishlist();
 
-  const [notification, setNotification] = useState(null);
-  const [loadingStates, setLoadingStates] = useState({
-    cart: new Set(),
-    wishlist: new Set(),
-  });
+  const [category, setCategory] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState("subcategories");
+  const [loadingProducts, setLoadingProducts] = useState(false);
 
-  // ============================================
-  // ✅ CARGAR CATEGORÍA (UNA SOLA VEZ)
-  // ============================================
+  const [cartLoadingStates, setCartLoadingStates] = useState({});
+  const [wishlistLoadingStates, setWishlistLoadingStates] = useState({});
+
   useEffect(() => {
-    if (slug) {
-      console.log("[CategoryDetail] ✅ Cargando categoría:", slug);
-      loadCategoryDetails(slug);
-    }
-  }, [slug]); // ✅ Sin loadCategoryDetails en dependencias
+    loadCategoryAndProducts();
+  }, [slug]);
 
-  // ============================================
-  // ✅ APLICAR FILTRO (UNA SOLA VEZ)
-  // ============================================
-  useEffect(() => {
-    if (slug) {
+  const loadCategoryAndProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("[CategoryDetailPage] ✅ Cargando categoría:", slug);
+
+      const categoryData = await getCategoryBySlug(slug);
+      setCategory(categoryData);
+
       console.log(
-        "[CategoryDetail] ✅ Filtrando productos por categoría:",
-        slug
+        "[CategoryDetailPage] ✅ Categoría cargada:",
+        categoryData.name
       );
-      filterByCategory(slug);
-    }
-  }, [slug]); // ✅ Sin filterByCategory en dependencias
 
-  // ============================================
-  // HELPERS
-  // ============================================
-  const showNotification = (type, message) => {
-    setNotification({ type, message });
-    setTimeout(() => setNotification(null), 3000);
-  };
+      trackCategoryView({
+        _id: categoryData._id,
+        name: categoryData.name,
+        slug: categoryData.slug,
+      });
 
-  const setItemLoading = (productId, operation, loading) => {
-    setLoadingStates((prev) => {
-      const newSet = new Set(prev[operation]);
-      if (loading) {
-        newSet.add(productId);
-      } else {
-        newSet.delete(productId);
+      const hasSubcategories = categoryData.subcategories?.length > 0;
+      const hasProducts = categoryData.stats?.productCount > 0;
+
+      if (!hasSubcategories && hasProducts) {
+        setActiveTab("products");
+      } else if (hasSubcategories) {
+        setActiveTab("subcategories");
       }
-      return { ...prev, [operation]: newSet };
-    });
+
+      if (hasProducts) {
+        await loadProducts(categoryData.slug);
+      }
+    } catch (err) {
+      console.error("[CategoryDetailPage] ❌ Error:", err);
+      setError(err.message || "Categoría no encontrada");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isItemLoading = (productId, operation) => {
-    return loadingStates[operation].has(productId);
+  const loadProducts = async (categorySlug) => {
+    try {
+      setLoadingProducts(true);
+
+      console.log(
+        "[CategoryDetailPage] ✅ Cargando productos de:",
+        categorySlug
+      );
+
+      const result = await getProductsByCategory(categorySlug, {
+        page: 1,
+        limit: 12,
+        sort: "createdAt",
+        order: "desc",
+      });
+
+      console.log(
+        "[CategoryDetailPage] ✅ Productos recibidos:",
+        result.products?.length
+      );
+
+      setProducts(result.products || []);
+    } catch (err) {
+      console.error("[CategoryDetailPage] ❌ Error loading products:", err);
+      setProducts([]);
+    } finally {
+      setLoadingProducts(false);
+    }
   };
 
-  // ============================================
-  // HANDLERS
-  // ============================================
   const handleAddToCart = async (product) => {
-    const productId = product._id;
-
-    if (!product.stock || product.stock === 0) {
-      showNotification("error", "Producto sin stock disponible");
-      return;
-    }
-
-    if (isInCart(productId)) {
-      const currentQty = getItemQuantity(productId);
-      showNotification(
-        "info",
-        `Ya tienes ${currentQty} unidades en el carrito`
-      );
-      return;
-    }
-
-    setItemLoading(productId, "cart", true);
-
+    setCartLoadingStates((prev) => ({ ...prev, [product._id]: true }));
     try {
-      await addToCart(productId, 1, {});
-      showNotification("success", `✅ ${product.name} agregado al carrito`);
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      showNotification("error", "❌ Error al agregar al carrito");
+      await addToCart(product._id, 1);
+    } catch (err) {
+      console.error("Error adding to cart:", err);
     } finally {
-      setItemLoading(productId, "cart", false);
+      setCartLoadingStates((prev) => ({ ...prev, [product._id]: false }));
     }
   };
 
-  const handleToggleWishlist = async (product) => {
-    const productId = product._id;
-    const inWishlist = isInWishlist(productId);
-
-    setItemLoading(productId, "wishlist", true);
-
+  const handleAddToWishlist = async (product) => {
+    setWishlistLoadingStates((prev) => ({ ...prev, [product._id]: true }));
     try {
-      if (inWishlist) {
-        await removeFromWishlist(productId);
-        showNotification("success", `💔 ${product.name} removido de favoritos`);
+      if (isItemInWishlist(product._id)) {
+        console.log("Ya está en wishlist");
       } else {
-        await addToWishlist(productId, true, true);
-        showNotification("success", `❤️ ${product.name} agregado a favoritos`);
+        await addToWishlist(product._id);
       }
-    } catch (error) {
-      console.error("Error toggling wishlist:", error);
-      showNotification("error", "❌ Error al actualizar favoritos");
+    } catch (err) {
+      console.error("Error adding to wishlist:", err);
     } finally {
-      setItemLoading(productId, "wishlist", false);
+      setWishlistLoadingStates((prev) => ({ ...prev, [product._id]: false }));
     }
+  };
+
+  const handleBreadcrumbClick = (breadcrumbSlug) => {
+    if (breadcrumbSlug === slug) return;
+    navigate(`/customer/categories/${breadcrumbSlug}`);
   };
 
   const handleSubcategoryClick = (subcategorySlug) => {
-    navigateToCategory(subcategorySlug);
+    navigate(`/customer/categories/${subcategorySlug}`);
   };
 
-  const handleSortChange = (e) => {
-    const value = e.target.value;
-    const [sortBy, order] = value.split("-");
-    changeSort(sortBy, order);
+  const handleViewAllProducts = () => {
+    navigate(`/customer/products?category=${slug}`);
   };
 
-  // ============================================
-  // RENDER: LOADING
-  // ============================================
-  if (categoryLoading) {
-    return <LoadingState />;
-  }
+  const handleBackToCategories = () => {
+    navigate("/customer/categories");
+  };
 
-  // ============================================
-  // RENDER: ERROR
-  // ============================================
-  if (categoryError || !currentCategory) {
-    return (
-      <ErrorState
-        error={categoryError}
-        onBack={() => navigate("/customer/categories")}
-      />
-    );
-  }
+  if (loading) return <LoadingState />;
+  if (error)
+    return <ErrorState error={error} onRetry={loadCategoryAndProducts} />;
+  if (!category) return <NotFoundState onBack={handleBackToCategories} />;
 
-  // ============================================
-  // ✅ USAR productCount DEL BACKEND (NO de pagination)
-  // ============================================
-  const realProductCount = currentCategory.productCount || 0;
+  const hasSubcategories =
+    category.subcategories && category.subcategories.length > 0;
+  const hasProducts = category.stats?.productCount > 0;
 
-  // ============================================
-  // RENDER: MAIN
-  // ============================================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-purple-50/30 to-pink-50/30 p-6">
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* Notification Toast */}
-        {notification && (
-          <div className="fixed top-4 right-4 z-50 animate-slide-in-right">
-            <div
-              className={`
-              px-6 py-4 rounded-2xl shadow-2xl border-2 flex items-center gap-3 min-w-[300px]
-              ${
-                notification.type === "success"
-                  ? "bg-green-50 border-green-500 text-green-900"
-                  : notification.type === "error"
-                  ? "bg-red-50 border-red-500 text-red-900"
-                  : "bg-blue-50 border-blue-500 text-blue-900"
-              }
-            `}
-            >
-              {notification.type === "success" && (
-                <span className="text-2xl">✅</span>
-              )}
-              {notification.type === "error" && (
-                <span className="text-2xl">❌</span>
-              )}
-              {notification.type === "info" && (
-                <span className="text-2xl">ℹ️</span>
-              )}
-              <span className="font-semibold">{notification.message}</span>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
+      <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-0 left-0 w-96 h-96 bg-white rounded-full blur-3xl animate-float" />
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl animate-float-delayed" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-white rounded-full blur-3xl animate-pulse-slow" />
+        </div>
+
+        {category.images?.hero && (
+          <div className="absolute inset-0 opacity-20">
+            <img
+              src={category.images.hero}
+              alt=""
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           </div>
         )}
 
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm flex-wrap">
-          <button
-            onClick={() => navigate("/customer/categories")}
-            className="text-gray-600 hover:text-purple-600 font-medium transition-colors"
-          >
-            Categorías
-          </button>
-          {breadcrumb.map((item, index) => (
-            <React.Fragment key={item.slug}>
-              <svg
-                className="w-4 h-4 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-              {index === breadcrumb.length - 1 ? (
-                <span className="text-purple-600 font-bold">{item.name}</span>
-              ) : (
-                <button
-                  onClick={() => navigateToCategory(item.slug)}
-                  className="text-gray-600 hover:text-purple-600 font-medium transition-colors"
-                >
-                  {item.name}
-                </button>
-              )}
-            </React.Fragment>
-          ))}
-        </nav>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+          {category.breadcrumb && category.breadcrumb.length > 0 && (
+            <Breadcrumb
+              items={category.breadcrumb}
+              onClick={handleBreadcrumbClick}
+              onBack={handleBackToCategories}
+            />
+          )}
 
-        {/* Category Header */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 to-pink-600 rounded-3xl shadow-2xl p-8">
-          <div className="absolute inset-0 bg-white/10 opacity-20">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-          </div>
-
-          <div className="relative flex flex-col md:flex-row items-start md:items-center gap-6">
-            {/* Icon */}
-            {currentCategory.images?.hero ? (
-              <div className="w-24 h-24 rounded-2xl bg-white/20 backdrop-blur-sm p-4 flex items-center justify-center">
-                <img
-                  src={currentCategory.images.hero}
-                  alt={currentCategory.name}
-                  className="w-full h-full object-contain"
-                />
+          <div className="mt-8 flex flex-col lg:flex-row items-start lg:items-center gap-8">
+            {category.images?.thumbnail && (
+              <div className="relative group flex-shrink-0">
+                <div className="absolute inset-0 bg-white/30 rounded-3xl blur-xl group-hover:blur-2xl transition-all duration-300" />
+                <div className="relative w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-3xl overflow-hidden bg-white/10 backdrop-blur-md ring-4 ring-white/30 shadow-2xl">
+                  <img
+                    src={category.images.thumbnail}
+                    alt={category.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  />
+                </div>
               </div>
-            ) : (
-              <div className="text-8xl">📦</div>
             )}
 
-            {/* Info */}
-            <div className="flex-1">
-              <h1 className="text-4xl font-black text-white mb-3">
-                {currentCategory.name}
-              </h1>
-              {currentCategory.description && (
-                <p className="text-white/90 text-lg mb-4 max-w-2xl">
-                  {currentCategory.description}
+            <div className="flex-1 text-white space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black leading-tight">
+                  {category.name}
+                </h1>
+                {category.featured && (
+                  <span className="inline-flex items-center gap-2 bg-yellow-400 text-gray-900 px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    Destacado
+                  </span>
+                )}
+              </div>
+
+              {category.description && (
+                <p className="text-xl text-white/90 leading-relaxed max-w-3xl">
+                  {category.description}
                 </p>
               )}
 
-              {/* Stats - ✅ USAR productCount DEL BACKEND */}
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full">
+              <div className="flex flex-wrap items-center gap-6 pt-2">
+                <StatBadge
+                  icon={
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+                    </svg>
+                  }
+                  label="Productos"
+                  value={category.stats?.productCount || 0}
+                />
+                <StatBadge
+                  icon={
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                      <path
+                        fillRule="evenodd"
+                        d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  }
+                  label="Vistas"
+                  value={(category.stats?.views || 0).toLocaleString()}
+                />
+                {hasSubcategories && (
+                  <StatBadge
+                    icon={
+                      <svg
+                        className="w-5 h-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
+                      </svg>
+                    }
+                    label="Subcategorías"
+                    value={category.subcategories.length}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0">
+          <svg
+            className="w-full h-12 sm:h-16 text-slate-50"
+            viewBox="0 0 1440 120"
+            preserveAspectRatio="none"
+          >
+            <path
+              fill="currentColor"
+              d="M0,64L80,69.3C160,75,320,85,480,80C640,75,800,53,960,48C1120,43,1280,53,1360,58.7L1440,64L1440,120L1360,120C1280,120,1120,120,960,120C800,120,640,120,480,120C320,120,160,120,80,120L0,120Z"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {hasSubcategories && hasProducts && (
+          <div className="mb-8">
+            <div className="bg-white rounded-2xl p-2 shadow-lg inline-flex gap-2">
+              <button
+                onClick={() => setActiveTab("subcategories")}
+                className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${
+                  activeTab === "subcategories"
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/50"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <span className="flex items-center gap-2">
                   <svg
                     className="w-5 h-5"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
-                    <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
+                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
                   </svg>
-                  <span className="font-bold">
-                    {realProductCount} productos
-                  </span>
-                </div>
+                  Subcategorías ({category.subcategories.length})
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("products")}
+                className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 ${
+                  activeTab === "products"
+                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/50"
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    className="w-5 h-5"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+                  </svg>
+                  Productos ({category.stats?.productCount || 0})
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
 
-                {currentCategory.views && (
-                  <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full">
+        {activeTab === "subcategories" && hasSubcategories && (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-black text-gray-900 flex items-center gap-3">
+                <span className="text-4xl">📂</span>
+                Explora por Subcategoría
+              </h2>
+              <span className="text-sm text-gray-500 font-medium">
+                {category.subcategories.length} categorías
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {category.subcategories.map((sub) => (
+                <CategoryCard
+                  key={sub._id}
+                  category={sub}
+                  onClick={() => handleSubcategoryClick(sub.slug)}
+                  size="md"
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeTab === "products" && hasProducts && (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-black text-gray-900 flex items-center gap-3">
+                <span className="text-4xl">🛍️</span>
+                Productos en {category.name}
+              </h2>
+              {products.length > 0 && (
+                <button
+                  onClick={handleViewAllProducts}
+                  className="group flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-bold transition-colors"
+                >
+                  Ver todos ({category.stats?.productCount})
+                  <svg
+                    className="w-5 h-5 group-hover:translate-x-1 transition-transform"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <ProductGrid
+              products={products}
+              isLoading={loadingProducts}
+              onAddToCart={handleAddToCart}
+              onAddToWishlist={handleAddToWishlist}
+              getIsInCart={(productId) => isInCart(productId)}
+              getIsInWishlist={(productId) => isItemInWishlist(productId)}
+              getIsCartLoading={(productId) =>
+                cartLoadingStates[productId] || false
+              }
+              getIsWishlistLoading={(productId) =>
+                wishlistLoadingStates[productId] || false
+              }
+            />
+
+            {products.length > 0 &&
+              products.length < category.stats?.productCount && (
+                <div className="text-center pt-8">
+                  <button
+                    onClick={handleViewAllProducts}
+                    className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
+                  >
                     <svg
-                      className="w-5 h-5"
+                      className="w-6 h-6"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -321,230 +434,32 @@ const CustomerCategoryDetailPage = () => {
                         d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                       />
                     </svg>
-                    <span className="font-bold">
-                      {currentCategory.views} vistas
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Back Button */}
-            {breadcrumb.length > 1 && (
-              <button
-                onClick={navigateUp}
-                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-                Volver
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Subcategories */}
-        {currentCategory.subcategories &&
-          currentCategory.subcategories.length > 0 && (
-            <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <span className="text-3xl">📂</span>
-                Subcategorías
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {currentCategory.subcategories.map((sub) => (
-                  <SubcategoryCard
-                    key={sub._id}
-                    category={sub}
-                    onClick={() => handleSubcategoryClick(sub.slug)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-        {/* Products Section */}
-        <section>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-3xl">🛍️</span>
-                Productos
-              </h2>
-              <p className="text-gray-600 mt-1">
-                {productsLoading
-                  ? "Cargando..."
-                  : `${products.length} de ${realProductCount} productos`}
-              </p>
-            </div>
-
-            {/* Sort Dropdown */}
-            <select
-              onChange={handleSortChange}
-              className="px-4 py-2 bg-white border-2 border-gray-300 rounded-xl font-medium hover:border-purple-600 focus:outline-none focus:border-purple-600 transition-colors"
-              defaultValue="createdAt-desc"
-            >
-              <option value="createdAt-desc">Más recientes</option>
-              <option value="createdAt-asc">Más antiguos</option>
-              <option value="price-asc">Precio: Menor a Mayor</option>
-              <option value="price-desc">Precio: Mayor a Menor</option>
-              <option value="name-asc">Nombre: A-Z</option>
-              <option value="name-desc">Nombre: Z-A</option>
-            </select>
-          </div>
-
-          {/* Products Grid */}
-          <ProductGrid
-            products={products}
-            isLoading={productsLoading}
-            onAddToCart={handleAddToCart}
-            onAddToWishlist={handleToggleWishlist}
-            getIsInCart={isInCart}
-            getIsInWishlist={isInWishlist}
-            getIsCartLoading={(productId) => isItemLoading(productId, "cart")}
-            getIsWishlistLoading={(productId) =>
-              isItemLoading(productId, "wishlist")
-            }
-          />
-
-          {/* Empty State */}
-          {!productsLoading && products.length === 0 && (
-            <div className="bg-white/60 backdrop-blur-lg rounded-3xl border-2 border-white/20 shadow-xl p-12 text-center">
-              <div className="text-8xl mb-6">📦</div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">
-                No hay productos en esta categoría
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Intenta explorar otras categorías o vuelve más tarde
-              </p>
-              <button
-                onClick={() => navigate("/customer/categories")}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-3 rounded-xl font-bold hover:shadow-xl transition-all"
-              >
-                Ver todas las categorías
-              </button>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {!productsLoading && pagination.pages > 1 && (
-            <div className="mt-8 bg-white/60 backdrop-blur-lg rounded-2xl border border-white/20 shadow-lg p-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-gray-600 font-medium">
-                  Página{" "}
-                  <span className="font-bold text-gray-900">
-                    {pagination.current}
-                  </span>{" "}
-                  de{" "}
-                  <span className="font-bold text-gray-900">
-                    {pagination.pages}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={prevPage}
-                    disabled={pagination.current === 1}
-                    className="px-4 py-2 bg-white border-2 border-gray-300 rounded-xl font-semibold hover:border-purple-600 hover:text-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    ← Anterior
-                  </button>
-
-                  <div className="hidden sm:flex items-center gap-1">
-                    {generatePageNumbers(
-                      pagination.current,
-                      pagination.pages
-                    ).map((page, index) =>
-                      page === "..." ? (
-                        <span
-                          key={`ellipsis-${index}`}
-                          className="px-2 text-gray-400"
-                        >
-                          ...
-                        </span>
-                      ) : (
-                        <button
-                          key={page}
-                          onClick={() => goToPage(page)}
-                          className={`w-10 h-10 rounded-xl font-bold transition-all ${
-                            pagination.current === page
-                              ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg scale-110"
-                              : "bg-white border-2 border-gray-300 text-gray-700 hover:border-purple-600 hover:text-purple-600"
-                          }`}
-                        >
-                          {page}
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  <button
-                    onClick={nextPage}
-                    disabled={pagination.current === pagination.pages}
-                    className="px-4 py-2 bg-white border-2 border-gray-300 rounded-xl font-semibold hover:border-purple-600 hover:text-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Siguiente →
+                    Ver Todos los Productos
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-        </section>
+              )}
+          </section>
+        )}
+
+        {!hasSubcategories && !hasProducts && (
+          <EmptyState onBack={handleBackToCategories} />
+        )}
       </div>
     </div>
   );
 };
 
-// ============================================
-// COMPONENTS
-// ============================================
-
-const SubcategoryCard = ({ category, onClick }) => (
-  <div
-    onClick={onClick}
-    className="group relative bg-white hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 rounded-2xl p-4 border-2 border-gray-200 hover:border-purple-400 cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-105"
+const Breadcrumb = ({ items, onClick, onBack }) => (
+  <nav
+    className="flex items-center gap-2 text-sm flex-wrap"
+    aria-label="Breadcrumb"
   >
-    {category.images?.thumbnail ? (
-      <div className="w-16 h-16 mx-auto mb-3 rounded-xl bg-gradient-to-br from-purple-100 to-pink-100 p-2 group-hover:scale-110 transition-transform duration-300">
-        <img
-          src={category.images.thumbnail}
-          alt={category.name}
-          className="w-full h-full object-contain"
-        />
-      </div>
-    ) : (
-      <div className="text-5xl text-center mb-3 group-hover:scale-110 transition-transform duration-300">
-        {category.icon || "📁"}
-      </div>
-    )}
-
-    <h3 className="text-center font-bold text-gray-900 mb-2 line-clamp-2">
-      {category.name}
-    </h3>
-
-    {category.productCount !== undefined && (
-      <div className="flex items-center justify-center gap-1 text-sm text-gray-600">
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" />
-        </svg>
-        <span className="font-semibold">{category.productCount}</span>
-      </div>
-    )}
-
-    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+    <button
+      onClick={onBack}
+      className="flex items-center gap-2 text-white/80 hover:text-white font-medium transition-colors group"
+    >
       <svg
-        className="w-5 h-5 text-purple-600"
+        className="w-5 h-5 group-hover:-translate-x-1 transition-transform"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -553,73 +468,145 @@ const SubcategoryCard = ({ category, onClick }) => (
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={2}
-          d="M9 5l7 7-7 7"
+          d="M15 19l-7-7 7-7"
         />
       </svg>
+      Categorías
+    </button>
+
+    {items.map((item, index) => (
+      <React.Fragment key={item.slug}>
+        <svg
+          className="w-4 h-4 text-white/60"
+          fill="currentColor"
+          viewBox="0 0 20 20"
+        >
+          <path
+            fillRule="evenodd"
+            d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+            clipRule="evenodd"
+          />
+        </svg>
+        <button
+          onClick={() => onClick(item.slug)}
+          className={`font-medium transition-colors ${
+            index === items.length - 1
+              ? "text-white font-bold pointer-events-none"
+              : "text-white/80 hover:text-white"
+          }`}
+        >
+          {item.name}
+        </button>
+      </React.Fragment>
+    ))}
+  </nav>
+);
+
+const StatBadge = ({ icon, label, value }) => (
+  <div className="flex items-center gap-2 bg-white/20 backdrop-blur-md rounded-full px-4 py-2 border border-white/30">
+    <div className="text-white">{icon}</div>
+    <div className="text-white">
+      <span className="font-bold text-lg">{value}</span>
+      <span className="text-sm text-white/80 ml-1">{label}</span>
     </div>
+  </div>
+);
+
+const EmptyState = ({ onBack }) => (
+  <div className="bg-white rounded-3xl shadow-2xl p-16 text-center max-w-2xl mx-auto">
+    <div className="text-8xl mb-6 animate-bounce">📦</div>
+    <h3 className="text-3xl font-bold text-gray-900 mb-4">
+      Categoría en Construcción
+    </h3>
+    <p className="text-gray-600 text-lg mb-8">
+      Estamos trabajando para traerte los mejores productos pronto. Mientras
+      tanto, explora otras categorías.
+    </p>
+    <button
+      onClick={onBack}
+      className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
+    >
+      <svg
+        className="w-6 h-6"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M10 19l-7-7m0 0l7-7m-7 7h18"
+        />
+      </svg>
+      Ver Todas las Categorías
+    </button>
   </div>
 );
 
 const LoadingState = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-purple-50/30 to-pink-50/30">
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30">
     <div className="text-center">
-      <div className="relative mb-6">
-        <div className="w-20 h-20 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mx-auto"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-3xl animate-bounce">📂</span>
+      <div className="relative mb-8">
+        <div className="absolute inset-0 bg-indigo-400/30 rounded-full blur-3xl animate-pulse" />
+        <div className="relative w-24 h-24 mx-auto">
+          <div className="absolute inset-0 border-8 border-indigo-200 rounded-full" />
+          <div className="absolute inset-0 border-8 border-t-indigo-600 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin" />
+          <div className="absolute inset-4 border-6 border-purple-200 rounded-full" />
+          <div
+            className="absolute inset-4 border-6 border-t-transparent border-r-purple-600 border-b-transparent border-l-transparent rounded-full animate-spin"
+            style={{ animationDirection: "reverse", animationDuration: "1.5s" }}
+          />
         </div>
       </div>
-      <h3 className="text-xl font-bold text-gray-900 mb-2">
+      <h3 className="text-2xl font-bold text-gray-900 mb-2 animate-pulse">
         Cargando categoría...
       </h3>
-      <p className="text-gray-600">Preparando la información</p>
+      <p className="text-gray-600">Preparando la mejor experiencia para ti</p>
     </div>
   </div>
 );
 
-const ErrorState = ({ error, onBack }) => (
-  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-purple-50/30 to-pink-50/30 p-6">
+const ErrorState = ({ error, onRetry }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30 p-6">
     <div className="bg-white rounded-3xl shadow-2xl p-12 max-w-md text-center">
-      <div className="text-8xl mb-6">😕</div>
-      <h2 className="text-3xl font-bold text-gray-900 mb-4">
-        Categoría no encontrada
-      </h2>
-      <p className="text-gray-600 mb-8">
-        {error || "La categoría que buscas no existe o ha sido removida."}
-      </p>
+      <div className="relative mb-8">
+        <div className="absolute inset-0 bg-red-400/20 rounded-full blur-3xl" />
+        <div className="relative text-8xl">⚠️</div>
+      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">Error al Cargar</h2>
+      <p className="text-gray-600 mb-8 text-lg">{error}</p>
       <button
-        onClick={onBack}
-        className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-xl font-bold hover:shadow-xl transition-all duration-300"
+        onClick={onRetry}
+        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
       >
-        Volver a Categorías
+        Intentar Nuevamente
       </button>
     </div>
   </div>
 );
 
-const generatePageNumbers = (current, total) => {
-  const pages = [];
-  const showEllipsis = total > 7;
-
-  if (!showEllipsis) {
-    for (let i = 1; i <= total; i++) {
-      pages.push(i);
-    }
-  } else {
-    pages.push(1);
-    if (current > 3) pages.push("...");
-    for (
-      let i = Math.max(2, current - 1);
-      i <= Math.min(current + 1, total - 1);
-      i++
-    ) {
-      pages.push(i);
-    }
-    if (current < total - 2) pages.push("...");
-    pages.push(total);
-  }
-
-  return pages;
-};
+const NotFoundState = ({ onBack }) => (
+  <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/30 p-6">
+    <div className="bg-white rounded-3xl shadow-2xl p-12 max-w-md text-center">
+      <div className="relative mb-8">
+        <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-3xl" />
+        <div className="relative text-8xl">🔍</div>
+      </div>
+      <h2 className="text-3xl font-bold text-gray-900 mb-4">
+        Categoría No Encontrada
+      </h2>
+      <p className="text-gray-600 mb-8 text-lg">
+        La categoría que buscas no existe o ha sido eliminada
+      </p>
+      <button
+        onClick={onBack}
+        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-8 py-4 rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300"
+      >
+        Ver Todas las Categorías
+      </button>
+    </div>
+  </div>
+);
 
 export default CustomerCategoryDetailPage;

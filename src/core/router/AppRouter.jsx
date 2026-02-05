@@ -3,41 +3,15 @@
 import { Routes, Route } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
-// ============================================================================
-// GUARDS
-// ============================================================================
 import { PrivateRoute } from "../guards/PrivateRoute";
 import { AdminRoute } from "../guards/AdminRoute";
 
-// ============================================================================
-// LAYOUTS
-// ============================================================================
-import Layout from "../../app/Layout"; // Layout público (Header + Footer)
-import AdminLayout from "../../modules/admin/layout/AdminLayout"; // Layout admin (Sidebar)
+import Layout from "../../app/Layout";
+import AdminLayout from "../../modules/admin/layout/AdminLayout";
 import CustomerLayout from "../../modules/customer/layout/CustomerLayout";
 import CustomerProviders from "../../modules/customer/providers/CustomerProviders";
 
-// ============================================================================
-// HOOKS
-// ============================================================================
 import { useScrollToTop } from "../hooks/useScroll";
-
-/**
- * @component AppRouter
- * @description Router principal de la aplicación
- *
- * ✅ ESTRUCTURA COMPLETA:
- * - Rutas públicas con Layout (Header + Footer)
- * - Rutas de autenticación sin Layout
- * - Rutas admin con AdminLayout (Sidebar) protegidas con AdminRoute
- * - Rutas customer protegidas con PrivateRoute
- * - Lazy loading en todas las páginas
- * - Scroll to top automático
- */
-
-// ============================================================================
-// LOADING SCREEN
-// ============================================================================
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -53,10 +27,6 @@ const LoadingScreen = () => (
   </div>
 );
 
-// ============================================================================
-// LAZY LOADED PAGES - PÚBLICAS
-// ============================================================================
-
 const HomePage = lazy(() => import("../../app/PaginaPrincipal"));
 const AboutPage = lazy(() => import("../../app/sobre-nosotros/SobreNosotros"));
 const WarrantyPage = lazy(() => import("../../app/garantia/Garantia"));
@@ -69,7 +39,6 @@ const FAQPage = lazy(() => import("../../app/FAQ/FAQ"));
 const PrivacidadPage = lazy(() => import("../../app/privacidad/Privacidad"));
 const TerminosPage = lazy(() => import("../../app/terminos/Terminos"));
 
-// Productos
 const ProductsListPage = lazy(() =>
   import("../../modules/products/pages/ProductosLista")
 );
@@ -77,7 +46,6 @@ const ProductDetailPage = lazy(() =>
   import("../../modules/products/pages/detalle/ProductoDetalle")
 );
 
-// Categorías
 const CategoriesPage = lazy(() =>
   import("../../modules/categories/pages/CategoriesPage")
 );
@@ -85,27 +53,16 @@ const CategoryDetailPage = lazy(() =>
   import("../../modules/categories/pages/CategoryDetailPage")
 );
 
-// Carrito
 const CartPage = lazy(() => import("../../modules/cart/pages/CartPage"));
 
-// ✅ Wishlist pública (CORREGIDO)
 const PublicWishlistPage = lazy(() =>
   import("../../modules/wishlist/pages/WishlistPage")
 );
 
-// Contact
 const ContactPage = lazy(() => import("../../modules/contact/pages/Contacto"));
-
-// ============================================================================
-// MÓDULO AUTH (src/modules/auth/pages/)
-// ============================================================================
 
 const LoginPage = lazy(() => import("../../modules/auth/pages/Login"));
 const RegisterPage = lazy(() => import("../../modules/auth/pages/Register"));
-
-// ============================================================================
-// LAZY LOADED PAGES - CUSTOMER
-// ============================================================================
 
 const CustomerDashboardPage = lazy(() =>
   import("../../modules/customer/pages/CustomerDashboardPage")
@@ -144,10 +101,6 @@ const CustomerWishlistPage = lazy(() =>
   import("../../modules/customer/pages/CustomerWishlistPage")
 );
 
-// ============================================================================
-// LAZY LOADED PAGES - ADMIN
-// ============================================================================
-
 const AdminDashboard = lazy(() =>
   import("../../modules/admin/pages/Dashboard")
 );
@@ -179,20 +132,12 @@ const AdminContactPage = lazy(() =>
   import("../../modules/admin/pages/Contact/ContactPage")
 );
 
-// ============================================================================
-// APP ROUTER COMPONENT
-// ============================================================================
-
 export default function AppRouter() {
   useScrollToTop();
 
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        {/* ================================================================== */}
-        {/* RUTAS PÚBLICAS CON LAYOUT (Header + Footer)                        */}
-        {/* ================================================================== */}
-
         <Route element={<Layout />}>
           <Route index element={<HomePage />} />
 
@@ -212,9 +157,9 @@ export default function AppRouter() {
             <Route path=":slug" element={<ProductDetailPage />} />
           </Route>
 
-          <Route path="categorias" element={<CategoriesPage />} />
+          <Route path="/categorias" element={<CategoriesPage />} />
           <Route
-            path="categorias/:categorySlug"
+            path="/categorias/:categorySlug"
             element={<CategoryDetailPage />}
           />
 
@@ -222,16 +167,8 @@ export default function AppRouter() {
           <Route path="lista-deseos" element={<PublicWishlistPage />} />
         </Route>
 
-        {/* ================================================================== */}
-        {/* RUTAS DE AUTENTICACIÓN (Sin Layout)                                */}
-        {/* ================================================================== */}
-
         <Route path="auth/login" element={<LoginPage />} />
         <Route path="auth/register" element={<RegisterPage />} />
-
-        {/* ================================================================== */}
-        {/* RUTAS CUSTOMER                                                     */}
-        {/* ================================================================== */}
 
         <Route
           path="customer"
@@ -257,10 +194,7 @@ export default function AppRouter() {
 
           <Route path="categories">
             <Route index element={<CustomerCategoriesPage />} />
-            <Route
-              path=":categorySlug"
-              element={<CustomerCategoryDetailPage />}
-            />
+            <Route path=":slug" element={<CustomerCategoryDetailPage />} />
           </Route>
 
           <Route path="products">
@@ -268,10 +202,6 @@ export default function AppRouter() {
             <Route path=":slug" element={<CustomerProductDetailPage />} />
           </Route>
         </Route>
-
-        {/* ================================================================== */}
-        {/* RUTAS ADMIN                                                        */}
-        {/* ================================================================== */}
 
         <Route
           path="admin"
@@ -304,10 +234,6 @@ export default function AppRouter() {
           <Route path="contact" element={<AdminContactPage />} />
           <Route path="analytics" element={<AnalyticsDashboard />} />
         </Route>
-
-        {/* ================================================================== */}
-        {/* 404                                                               */}
-        {/* ================================================================== */}
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

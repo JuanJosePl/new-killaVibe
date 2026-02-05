@@ -1,6 +1,13 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { productsAPI } from '../api/products.api';
-import { validateProduct, validateStock } from '../schemas/product.schema';
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+import { productsAPI } from "../api/products.api";
+import { validateProduct, validateStock } from "../schemas/product.schema";
 
 /**
  * @context ProductsContext
@@ -11,6 +18,11 @@ import { validateProduct, validateStock } from '../schemas/product.schema';
  * - Favoritos
  * - Carrito (integración)
  * - Filtros globales
+ *
+ * ✅ FIXES APLICADOS:
+ * 1. Bug línea 78: eliminado "return newCache"
+ * 2. Optimización: flag initialized para evitar llamadas duplicadas
+ * 3. Mejora: useRef para productCache mutable
  */
 
 const ProductsContext = createContext(null);
@@ -18,7 +30,7 @@ const ProductsContext = createContext(null);
 export const useProducts = () => {
   const context = useContext(ProductsContext);
   if (!context) {
-    throw new Error('useProducts debe ser usado dentro de ProductsProvider');
+    throw new Error("useProducts debe ser usado dentro de ProductsProvider");
   }
   return context;
 };
@@ -29,14 +41,15 @@ export const ProductsProvider = ({ children }) => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Caché de productos individuales
-  const [productCache, setProductCache] = useState(new Map());
-  
+
+  // ✅ FIX: Usar useRef para caché mutable (evita re-renders innecesarios)
+  const productCacheRef = useRef(new Map());
+  const [cacheVersion, setCacheVersion] = useState(0); // Trigger para componentes que necesitan actualización
+
   // Favoritos (sincronizado con localStorage)
   const [favorites, setFavorites] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('product_favorites');
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("product_favorites");
       return saved ? JSON.parse(saved) : [];
     }
     return [];
@@ -46,10 +59,10 @@ export const ProductsProvider = ({ children }) => {
   const [globalFilters, setGlobalFilters] = useState({
     page: 1,
     limit: 12,
-    sort: 'createdAt',
-    order: 'desc',
-    status: 'active',
-    visibility: 'public',
+    sort: "createdAt",
+    order: "desc",
+    status: "active",
+    visibility: "public",
   });
 
   // Paginación
@@ -60,52 +73,59 @@ export const ProductsProvider = ({ children }) => {
     limit: 12,
   });
 
+  // ✅ FIX: Flag de inicialización para evitar fetch duplicado
+  const initialized = useRef(false);
+
   // ========== FUNCIONES DE PRODUCTOS ==========
 
   /**
    * Fetch productos con filtros
    */
-  const fetchProducts = useCallback(async (filters = {}) => {
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchProducts = useCallback(
+    async (filters = {}) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const mergedFilters = { ...globalFilters, ...filters };
-      const response = await productsAPI.getProducts(mergedFilters);
+        const mergedFilters = { ...globalFilters, ...filters };
+        const response = await productsAPI.getProducts(mergedFilters);
 
-      if (response.success) {
-        setProducts(response.data || []);
-        setPagination(response.pagination || {});
-        
-        // Actualizar caché
-        response.data?.forEach(product => {
-          productCache.set(product._id, product);        });
-        return newCache;
-        setProductCache(new Map(productCache));
-      } else {
-        setError(response.message || 'Error al cargar productos');
+        if (response.success) {
+          setProducts(response.data || []);
+          setPagination(response.pagination || {});
+
+          // ✅ FIX: Actualizar caché sin crear variable intermedia
+          response.data?.forEach((product) => {
+            productCacheRef.current.set(product._id, product);
+          });
+          setCacheVersion((v) => v + 1); // Notificar actualización de caché
+        } else {
+          setError(response.message || "Error al cargar productos");
+          setProducts([]);
+        }
+      } catch (err) {
+        console.error("[ProductsContext] Error fetching products:", err);
+        setError(err.response?.data?.message || "Error al cargar productos");
         setProducts([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('[ProductsContext] Error fetching products:', err);
-      setError(err.response?.data?.message || 'Error al cargar productos');
-      setProducts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [globalFilters, productCache]);
+    },
+    [globalFilters]
+  );
+
   /**
    * Fetch productos destacados
    */
   const fetchFeaturedProducts = useCallback(async (limit = 8) => {
     try {
       const response = await productsAPI.getFeaturedProducts(limit);
-      
+
       if (response.success) {
         setFeaturedProducts(response.data || []);
       }
     } catch (err) {
-      console.error('[ProductsContext] Error fetching featured:', err);
+      console.error("[ProductsContext] Error fetching featured:", err);
     }
   }, []);
 
@@ -118,7 +138,9 @@ export const ProductsProvider = ({ children }) => {
       setError(null);
 
       // Buscar en caché primero
-      const cached = Array.from(productCache.values()).find(p => p.slug === slug);
+      const cached = Array.from(productCacheRef.current.values()).find(
+        (p) => p.slug === slug
+      );
       if (cached) {
         setLoading(false);
         return cached;
@@ -128,24 +150,24 @@ export const ProductsProvider = ({ children }) => {
 
       if (response.success) {
         const product = response.data;
-        
+
         // Actualizar caché
-        productCache.set(product._id, product);
-        setProductCache(new Map(productCache));
-        
+        productCacheRef.current.set(product._id, product);
+        setCacheVersion((v) => v + 1);
+
         return product;
       } else {
-        setError(response.message || 'Producto no encontrado');
+        setError(response.message || "Producto no encontrado");
         return null;
       }
     } catch (err) {
-      console.error('[ProductsContext] Error fetching product:', err);
-      setError(err.response?.data?.message || 'Error al cargar producto');
+      console.error("[ProductsContext] Error fetching product:", err);
+      setError(err.response?.data?.message || "Error al cargar producto");
       return null;
     } finally {
       setLoading(false);
     }
-  }, [productCache]);
+  }, []);
 
   /**
    * Obtener producto por ID (con caché)
@@ -156,7 +178,7 @@ export const ProductsProvider = ({ children }) => {
       setError(null);
 
       // Buscar en caché
-      const cached = productCache.get(id);
+      const cached = productCacheRef.current.get(id);
       if (cached) {
         setLoading(false);
         return cached;
@@ -166,24 +188,24 @@ export const ProductsProvider = ({ children }) => {
 
       if (response.success) {
         const product = response.data;
-        
+
         // Actualizar caché
-        productCache.set(product._id, product);
-        setProductCache(new Map(productCache));
-        
+        productCacheRef.current.set(product._id, product);
+        setCacheVersion((v) => v + 1);
+
         return product;
       } else {
-        setError(response.message || 'Producto no encontrado');
+        setError(response.message || "Producto no encontrado");
         return null;
       }
     } catch (err) {
-      console.error('[ProductsContext] Error fetching product by ID:', err);
-      setError(err.response?.data?.message || 'Error al cargar producto');
+      console.error("[ProductsContext] Error fetching product by ID:", err);
+      setError(err.response?.data?.message || "Error al cargar producto");
       return null;
     } finally {
       setLoading(false);
     }
-  }, [productCache]);
+  }, []);
 
   /**
    * Buscar productos
@@ -195,14 +217,14 @@ export const ProductsProvider = ({ children }) => {
       }
 
       const response = await productsAPI.searchProducts(query.trim(), limit);
-      
+
       if (response.success) {
         return response.data || [];
       }
-      
+
       return [];
     } catch (err) {
-      console.error('[ProductsContext] Error searching products:', err);
+      console.error("[ProductsContext] Error searching products:", err);
       return [];
     }
   }, []);
@@ -213,14 +235,14 @@ export const ProductsProvider = ({ children }) => {
   const checkStock = useCallback(async (productId, quantity) => {
     try {
       const response = await productsAPI.checkStock(productId, quantity);
-      
+
       if (response.success) {
         return response.data;
       }
-      
+
       return { available: false };
     } catch (err) {
-      console.error('[ProductsContext] Error checking stock:', err);
+      console.error("[ProductsContext] Error checking stock:", err);
       return { available: false, error: err.response?.data?.message };
     }
   }, []);
@@ -231,14 +253,14 @@ export const ProductsProvider = ({ children }) => {
   const getRelatedProducts = useCallback(async (productId, limit = 4) => {
     try {
       const response = await productsAPI.getRelatedProducts(productId, limit);
-      
+
       if (response.success) {
         return response.data || [];
       }
-      
+
       return [];
     } catch (err) {
-      console.error('[ProductsContext] Error fetching related products:', err);
+      console.error("[ProductsContext] Error fetching related products:", err);
       return [];
     }
   }, []);
@@ -255,8 +277,8 @@ export const ProductsProvider = ({ children }) => {
         : [...prev, productId];
 
       // Sincronizar con localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('product_favorites', JSON.stringify(updated));
+      if (typeof window !== "undefined") {
+        localStorage.setItem("product_favorites", JSON.stringify(updated));
       }
 
       return updated;
@@ -278,8 +300,8 @@ export const ProductsProvider = ({ children }) => {
    */
   const clearFavorites = useCallback(() => {
     setFavorites([]);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('product_favorites');
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("product_favorites");
     }
   }, []);
 
@@ -289,12 +311,12 @@ export const ProductsProvider = ({ children }) => {
   const getFavoriteProducts = useCallback(async () => {
     try {
       const favoriteProducts = await Promise.all(
-        favorites.map(id => getProductById(id))
+        favorites.map((id) => getProductById(id))
       );
-      
+
       return favoriteProducts.filter(Boolean);
     } catch (err) {
-      console.error('[ProductsContext] Error fetching favorite products:', err);
+      console.error("[ProductsContext] Error fetching favorite products:", err);
       return [];
     }
   }, [favorites, getProductById]);
@@ -319,10 +341,10 @@ export const ProductsProvider = ({ children }) => {
     setGlobalFilters({
       page: 1,
       limit: 12,
-      sort: 'createdAt',
-      order: 'desc',
-      status: 'active',
-      visibility: 'public',
+      sort: "createdAt",
+      order: "desc",
+      status: "active",
+      visibility: "public",
     });
   }, []);
 
@@ -332,28 +354,29 @@ export const ProductsProvider = ({ children }) => {
    * Limpiar caché
    */
   const clearCache = useCallback(() => {
-    setProductCache(new Map());
+    productCacheRef.current.clear();
+    setCacheVersion((v) => v + 1);
   }, []);
 
   /**
    * Invalidar producto en caché
    */
   const invalidateProduct = useCallback((productId) => {
-    const newCache = new Map(productCache);
-    newCache.delete(productId);
-    setProductCache(newCache);
-  }, [productCache]);
+    productCacheRef.current.delete(productId);
+    setCacheVersion((v) => v + 1);
+  }, []);
 
   // ========== EFECTOS ==========
 
   /**
-   * Cargar productos destacados al montar
+   * ✅ FIX: Cargar productos destacados solo una vez al montar
    */
-useEffect(() => {
-  if (products.length === 0) {
-    fetchProducts(); // Función que trae todos los productos de la API
-  }
-}, []);
+  useEffect(() => {
+    if (!initialized.current) {
+      fetchFeaturedProducts();
+      initialized.current = true;
+    }
+  }, [fetchFeaturedProducts]);
 
   // ========== VALOR DEL CONTEXTO ==========
   const value = {
@@ -365,7 +388,7 @@ useEffect(() => {
     pagination,
     globalFilters,
     favorites,
-    
+
     // Funciones de productos
     fetchProducts,
     fetchFeaturedProducts,
@@ -374,23 +397,24 @@ useEffect(() => {
     searchProducts,
     checkStock,
     getRelatedProducts,
-    
+
     // Funciones de favoritos
     toggleFavorite,
     isFavorite,
     clearFavorites,
     getFavoriteProducts,
-    
+
     // Funciones de filtros
     updateFilters,
     resetFilters,
-    
+
     // Funciones de caché
     clearCache,
     invalidateProduct,
-    
+
     // Utilidades
-    productCache,
+    productCache: productCacheRef.current,
+    cacheVersion, // Para componentes que necesitan observar cambios
     validateProduct,
     validateStock,
   };

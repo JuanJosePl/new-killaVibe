@@ -9,24 +9,8 @@ import { CustomerProductsProvider } from "../context/CustomerProductsContext";
 import { CustomerCategoriesProvider } from "../context/CustomerCategoriesContext";
 import { CustomerReviewsProvider } from "../context/CustomerReviewsContext";
 import { CustomerOrdersProvider } from "../context/CustomerOrdersContext";
-import { CustomerContactProvider } from "../context/CustomerContactContext"; // ✅ NUEVO
+import { CustomerContactProvider } from "../context/CustomerContactContext";
 
-/**
- * ============================================
- * 🔌 CUSTOMER PROVIDERS
- * ============================================
- * 
- * ✅ ORDEN DE PROVIDERS (por dependencia):
- * 1. CustomerProfileProvider - Base (autenticación)
- * 2. CustomerActivityProvider - Tracking
- * 3. CustomerCategoriesProvider - Categorías
- * 4. CustomerProductsProvider - Productos
- * 5. CustomerReviewsProvider - Reviews
- * 6. CustomerOrdersProvider - Órdenes
- * 7. CustomerCartProvider - Carrito
- * 8. CustomerWishlistProvider - Wishlist
- * 9. CustomerContactProvider - Contact ✅ AGREGADO
- */
 const CustomerProviders = ({ children }) => {
   return (
     <CustomerProfileProvider>

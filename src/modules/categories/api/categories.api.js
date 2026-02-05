@@ -11,6 +11,7 @@ import axiosInstance from '../../../core/api/axiosInstance';
  * - GET    /api/categories/popular            (público)
  * - GET    /api/categories/search             (público)
  * - GET    /api/categories/:slug              (público)
+ * - GET    /api/categories/:id/seo            (público) ✅ AGREGADO
  * - POST   /api/categories                    (admin)
  * - PUT    /api/categories/:id                (admin)
  * - DELETE /api/categories/:id                (admin)
@@ -120,6 +121,26 @@ export const getCategoryBySlug = async (slug) => {
 };
 
 /**
+ * ✅ NUEVO - Obtener contexto SEO de una categoría (reutilizable)
+ * 
+ * @param {string} categoryId - ID de la categoría
+ * @returns {Promise<{success: boolean, data: Object}>}
+ * @throws {Error} 404 - Si categoría no existe
+ * @example
+ * // Response data includes:
+ * {
+ *   title, description, keywords,
+ *   ogTitle, ogDescription, ogImage,
+ *   canonicalUrl, breadcrumb,
+ *   metaTags: { ... } // Listo para React Helmet
+ * }
+ */
+export const getCategorySEOContext = async (categoryId) => {
+  const response = await axiosInstance.get(`${BASE_URL}/${categoryId}/seo`);
+  return response.data;
+};
+
+/**
  * Crear nueva categoría (ADMIN ONLY)
  * 
  * @param {Object} categoryData - Datos de la categoría
@@ -183,6 +204,7 @@ export default {
   getPopularCategories,
   searchCategories,
   getCategoryBySlug,
+  getCategorySEOContext, // ✅ AGREGADO
   createCategory,
   updateCategory,
   deleteCategory,

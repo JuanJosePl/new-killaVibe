@@ -47,6 +47,22 @@ export const getPriceChanges = async () => {
   return response.data;
 };
 
+/**
+ * @description Sincroniza wishlist guest → usuario autenticado
+ */
+export const syncGuestWishlist = async (items = []) => {
+  if (!items.length) {
+    return { success: true, migratedCount: 0 };
+  }
+
+  const response = await customerApiClient.post('/wishlist/sync', {
+    items,
+  });
+
+  return response.data;
+};
+
+
 export default {
   getWishlist,
   addToWishlist,
@@ -55,4 +71,5 @@ export default {
   checkInWishlist,
   moveToCart,
   getPriceChanges,
+  syncGuestWishlist,
 };

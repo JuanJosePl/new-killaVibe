@@ -22,7 +22,7 @@ const ProductDetail = lazy(() => import("../pages/CustomerProductDetailPage"));
 
 // ✅ CATEGORIES
 const Categories = lazy(() => import("../pages/CustomerCategoriesPage"));
-const CategoryDetail = lazy(() =>
+const CustomerCategoryDetailPage = lazy(() =>
   import("../pages/CustomerCategoryDetailPage")
 );
 
@@ -104,7 +104,7 @@ const CustomerPanelRouter = () => {
 
             {/* ✅ CATEGORIES */}
             <Route path="categories" element={<Categories />} />
-            <Route path="categories/:slug" element={<CategoryDetail />} />
+            <Route path="categories/:slug" element={< CustomerCategoryDetailPage/>} />
 
             {/* CORE */}
             <Route path="cart" element={<Cart />} />

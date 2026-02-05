@@ -5,7 +5,7 @@ import {
   deleteCategory,
   getCategoryBySlug,
 } from '../api/categories.api';
-import { createCategorySchema, updateCategorySchema } from '../schemas/category.schema';
+import { createCategorySchema, updateCategorySchema } from '../schema/category.schema';
 
 /**
  * @hook useCategoryActions

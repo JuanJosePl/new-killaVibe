@@ -1,20 +1,22 @@
 // src/modules/products/api/products.api.js
 
-import axiosInstance from '../../../core/api/axiosInstance';
+import axiosInstance from "../../../core/api/axiosInstance";
 
 /**
  * @module productsAPI
  * @description API calls para productos
- * 
+ *
  * IMPORTANTE: Todas las funciones retornan formato exacto del backend:
  * - { success, message?, data?, pagination?, errors? }
+ *
+ * ✅ ACTUALIZADO: Agregado getProductSEOContext para completar cobertura 100%
  */
 
 export const productsAPI = {
   /**
    * @function getProducts
    * @description Obtener productos con filtros y paginación
-   * 
+   *
    * @param {Object} filters
    * @param {number} [filters.page=1] - Página actual
    * @param {number} [filters.limit=12] - Productos por página (max 100)
@@ -29,9 +31,9 @@ export const productsAPI = {
    * @param {boolean} [filters.featured] - Solo destacados
    * @param {boolean} [filters.inStock] - Solo en stock
    * @param {string} [filters.brand] - Marca
-   * 
+   *
    * @returns {Promise<Object>} { success, message, data[], pagination }
-   * 
+   *
    * @example
    * const response = await productsAPI.getProducts({
    *   page: 1,
@@ -47,13 +49,13 @@ export const productsAPI = {
 
     // Agregar solo filtros con valor
     Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         queryParams.append(key, value);
       }
     });
 
     const queryString = queryParams.toString();
-    const url = queryString ? `/products?${queryString}` : '/products';
+    const url = queryString ? `/products?${queryString}` : "/products";
 
     return await axiosInstance.get(url);
   },
@@ -61,11 +63,11 @@ export const productsAPI = {
   /**
    * @function getProductBySlug
    * @description Obtener producto por slug
-   * 
+   *
    * @param {string} slug - Slug del producto
    * @returns {Promise<Object>} { success, data }
    * @throws {Object} { success: false, message, statusCode: 404 }
-   * 
+   *
    * @example
    * const response = await productsAPI.getProductBySlug('airpods-pro-2da-generacion');
    */
@@ -76,7 +78,7 @@ export const productsAPI = {
   /**
    * @function getProductById
    * @description Obtener producto por ID (usado en admin)
-   * 
+   *
    * @param {string} id - ID del producto
    * @returns {Promise<Object>} { success, data }
    */
@@ -87,10 +89,10 @@ export const productsAPI = {
   /**
    * @function getFeaturedProducts
    * @description Obtener productos destacados
-   * 
+   *
    * @param {number} [limit=8] - Límite de productos
    * @returns {Promise<Object>} { success, count, data[] }
-   * 
+   *
    * @example
    * const response = await productsAPI.getFeaturedProducts(4);
    */
@@ -101,27 +103,29 @@ export const productsAPI = {
   /**
    * @function getRelatedProducts
    * @description Obtener productos relacionados
-   * 
+   *
    * @param {string} productId - ID del producto actual
    * @param {number} [limit=4] - Límite de productos
    * @returns {Promise<Object>} { success, count, data[] }
-   * 
+   *
    * @example
    * const response = await productsAPI.getRelatedProducts('507f1f77bcf86cd799439011', 4);
    */
   getRelatedProducts: async (productId, limit = 4) => {
-    return await axiosInstance.get(`/products/related/${productId}?limit=${limit}`);
+    return await axiosInstance.get(
+      `/products/related/${productId}?limit=${limit}`
+    );
   },
 
   /**
    * @function searchProducts
    * @description Buscar productos con full-text search
-   * 
+   *
    * @param {string} query - Término de búsqueda (min 2 chars)
    * @param {number} [limit=10] - Límite de resultados
    * @returns {Promise<Object>} { success, count, data[] }
    * @throws {Object} { success: false, message: 'Mínimo 2 caracteres', statusCode: 400 }
-   * 
+   *
    * @example
    * const response = await productsAPI.searchProducts('airpods', 10);
    */
@@ -132,11 +136,11 @@ export const productsAPI = {
   /**
    * @function getProductsByCategory
    * @description Obtener productos por categoría
-   * 
+   *
    * @param {string} categorySlug - Slug de la categoría
    * @param {Object} [filters={}] - Filtros adicionales (igual que getProducts)
    * @returns {Promise<Object>} { success, data[], pagination }
-   * 
+   *
    * @example
    * const response = await productsAPI.getProductsByCategory('audio', {
    *   page: 1,
@@ -149,13 +153,13 @@ export const productsAPI = {
     const queryParams = new URLSearchParams();
 
     Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
+      if (value !== undefined && value !== null && value !== "") {
         queryParams.append(key, value);
       }
     });
 
     const queryString = queryParams.toString();
-    const url = queryString 
+    const url = queryString
       ? `/products/category/${categorySlug}?${queryString}`
       : `/products/category/${categorySlug}`;
 
@@ -165,7 +169,7 @@ export const productsAPI = {
   /**
    * @function getTopSellingProducts
    * @description Obtener productos más vendidos
-   * 
+   *
    * @param {number} [limit=10] - Límite de productos
    * @returns {Promise<Object>} { success, count, data[] }
    */
@@ -176,18 +180,41 @@ export const productsAPI = {
   /**
    * @function checkStock
    * @description Verificar disponibilidad de stock
-   * 
+   *
    * @param {string} productId - ID del producto
    * @param {number} quantity - Cantidad deseada
    * @returns {Promise<Object>} { success, data: { available, stock, allowBackorder } }
    * @throws {Object} { success: false, message: 'Stock insuficiente', statusCode: 409 }
-   * 
+   *
    * @example
    * const response = await productsAPI.checkStock('507f1f77bcf86cd799439011', 2);
    * // { success: true, data: { available: true, stock: 15, allowBackorder: false } }
    */
   checkStock: async (productId, quantity) => {
-    return await axiosInstance.post(`/products/check-stock/${productId}`, { quantity });
+    return await axiosInstance.post(`/products/check-stock/${productId}`, {
+      quantity,
+    });
+  },
+
+  /**
+   * ✅ NUEVO - @function getProductSEOContext
+   * @description Obtener contexto SEO de un producto (útil para SSR/SSG)
+   *
+   * @param {string} id - ID del producto
+   * @returns {Promise<Object>} { success, data: ProductSEODTO }
+   *
+   * @example
+   * const response = await productsAPI.getProductSEOContext('507f1f77bcf86cd799439011');
+   * // { success: true, data: { title, description, keywords, og*, breadcrumb, category } }
+   *
+   * @use_case
+   * - Pre-renderizado SSR/SSG
+   * - Meta tags dinámicos
+   * - Open Graph tags
+   * - Breadcrumbs estructurados
+   */
+  getProductSEOContext: async (id) => {
+    return await axiosInstance.get(`/products/${id}/seo`);
   },
 
   // ========== ADMIN ENDPOINTS (requieren autenticación) ==========
@@ -195,11 +222,11 @@ export const productsAPI = {
   /**
    * @function createProduct (ADMIN)
    * @description Crear nuevo producto
-   * 
+   *
    * @param {Object} productData - Datos del producto
    * @returns {Promise<Object>} { success, message, data }
    * @throws {Object} { success: false, message, statusCode: 400/401/403 }
-   * 
+   *
    * @example
    * const response = await productsAPI.createProduct({
    *   name: 'AirPods Pro 2da Gen',
@@ -211,13 +238,13 @@ export const productsAPI = {
    * });
    */
   createProduct: async (productData) => {
-    return await axiosInstance.post('/products', productData);
+    return await axiosInstance.post("/products", productData);
   },
 
   /**
    * @function updateProduct (ADMIN)
    * @description Actualizar producto existente
-   * 
+   *
    * @param {string} id - ID del producto
    * @param {Object} updateData - Campos a actualizar
    * @returns {Promise<Object>} { success, message, data }
@@ -229,7 +256,7 @@ export const productsAPI = {
   /**
    * @function deleteProduct (ADMIN)
    * @description Archivar producto (soft delete)
-   * 
+   *
    * @param {string} id - ID del producto
    * @returns {Promise<Object>} { success, message }
    */
@@ -240,14 +267,14 @@ export const productsAPI = {
   /**
    * @function getLowStockProducts (ADMIN)
    * @description Obtener productos con stock bajo
-   * 
+   *
    * @param {number} [threshold] - Umbral de stock (default: lowStockThreshold del producto)
    * @returns {Promise<Object>} { success, count, data[] }
    */
   getLowStockProducts: async (threshold) => {
-    const url = threshold 
+    const url = threshold
       ? `/products/admin/low-stock?threshold=${threshold}`
-      : '/products/admin/low-stock';
+      : "/products/admin/low-stock";
     return await axiosInstance.get(url);
   },
 };
