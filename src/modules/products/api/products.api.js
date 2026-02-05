@@ -12,7 +12,7 @@ import axiosInstance from "../../../core/api/axiosInstance";
  * ✅ ACTUALIZADO: Agregado getProductSEOContext para completar cobertura 100%
  */
 
-export const productsAPI = {
+ const productsAPI = {
   /**
    * @function getProducts
    * @description Obtener productos con filtros y paginación
@@ -278,3 +278,5 @@ export const productsAPI = {
     return await axiosInstance.get(url);
   },
 };
+
+export default productsAPI;

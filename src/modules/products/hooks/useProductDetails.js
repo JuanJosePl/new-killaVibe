@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import * as productsApi from '../api/products.api';
-
+import productsApi from '../api/products.api';
 /**
  * @hook useProductDetails
  * @description Hook para obtener detalles de un producto

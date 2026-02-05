@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import * as productsApi from '../api/products.api';
+import productsApi from '../api/products.api';
 import { SEARCH_CONFIG } from '../types/product.types';
 
 /**
