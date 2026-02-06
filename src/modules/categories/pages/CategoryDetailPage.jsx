@@ -2,7 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import useCategoryActions from "../hooks/useCategoryActions";
-import  productsAPI  from "../../products/api/products.api";
+import productsAPI from "../../products/api/products.api";
 import { ProductCard } from "../../products/components/ProductCard";
 import { useProductCart } from "../../products/hooks/useProductCart";
 import { useProductWishlist } from "../../products/hooks/useProductWishlist";
@@ -12,15 +12,10 @@ import { formatProductCount } from "../utils/categoryHelpers";
  * @page CategoryDetailPage
  * @description Página de detalle de categoría con productos, breadcrumb y SEO
  *
- * CARACTERÍSTICAS:
- * - Breadcrumb pre-construido desde backend
- * - SEO context completo para meta tags
- * - Subcategorías con productCount actualizado
- * - Productos de la categoría
- * - Stats de la categoría
- * - Integración con cart y wishlist
- *
- * ✅ CORREGIDO: Transformación de productos para compatibilidad con ProductCard
+ * ✅ CORREGIDO:
+ * - fetchBySlug ya retorna response.data directamente
+ * - Transformación de productos para compatibilidad con ProductCard
+ * - Debug logs completos
  */
 const CategoryDetailPage = () => {
   const { categorySlug } = useParams();
@@ -49,16 +44,26 @@ const CategoryDetailPage = () => {
       setError(null);
 
       try {
-        console.log("[CategoryDetailPage] Loading category:", categorySlug);
+        console.log("[CategoryDetailPage] 🔄 Loading category:", categorySlug);
 
-        // ✅ Backend retorna CategoryDetailDTO completo
-        const data = await fetchBySlug(categorySlug);
+        // ✅ FIX: fetchBySlug ya retorna response.data (el objeto de categoría)
+        // No necesitamos hacer data.data
+        const categoryData = await fetchBySlug(categorySlug);
 
-        console.log("[CategoryDetailPage] Category loaded:", data);
-        setCategory(data);
+        console.log("[CategoryDetailPage] ✅ Category loaded:", categoryData);
+        console.log("[CategoryDetailPage] 📊 Category name:", categoryData?.name);
+        console.log("[CategoryDetailPage] 📊 Product count:", categoryData?.stats?.productCount);
+
+        // ✅ Validar que categoryData existe
+        if (!categoryData) {
+          throw new Error("Categoría no encontrada");
+        }
+
+        setCategory(categoryData);
       } catch (err) {
-        setError(err.message || "Error al cargar categoría");
-        console.error("[CategoryDetailPage] Error loading category:", err);
+        const errorMsg = err.message || "Error al cargar categoría";
+        setError(errorMsg);
+        console.error("[CategoryDetailPage] ❌ Error loading category:", err);
       } finally {
         setLoadingCategory(false);
       }
@@ -75,15 +80,12 @@ const CategoryDetailPage = () => {
       setLoadingProducts(true);
 
       try {
-        console.log(
-          "[CategoryDetailPage] Loading products for category:",
-          categorySlug
-        );
+        console.log("[CategoryDetailPage] 🔄 Loading products for:", categorySlug);
 
         // ✅ Endpoint directo de productos por categoría
         const response = await productsAPI.getProductsByCategory(categorySlug);
 
-        console.log("[CategoryDetailPage] Products response:", response);
+        console.log("[CategoryDetailPage] 📦 Products response:", response);
 
         if (response && response.success && Array.isArray(response.data)) {
           // ✅ Transformar productos para asegurar compatibilidad con ProductCard
@@ -104,20 +106,14 @@ const CategoryDetailPage = () => {
             category: product.category || product.categories?.[0] || null,
           }));
 
-          console.log(
-            "[CategoryDetailPage] Products transformed:",
-            transformedProducts
-          );
+          console.log("[CategoryDetailPage] ✅ Products transformed:", transformedProducts.length, "productos");
           setProducts(transformedProducts);
         } else {
-          console.warn(
-            "[CategoryDetailPage] Invalid response format:",
-            response
-          );
+          console.warn("[CategoryDetailPage] ⚠️ Invalid response format:", response);
           setProducts([]);
         }
       } catch (err) {
-        console.error("[CategoryDetailPage] Error loading products:", err);
+        console.error("[CategoryDetailPage] ❌ Error loading products:", err);
         setProducts([]);
       } finally {
         setLoadingProducts(false);
@@ -379,12 +375,11 @@ const CategoryDetailPage = () => {
               </div>
             ) : (
               <>
-                {/* Debug info (eliminar en producción) */}
+                {/* Debug info (solo en desarrollo) */}
                 {process.env.NODE_ENV === "development" && (
                   <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-800">
-                      <strong>Debug:</strong> {products.length} productos
-                      cargados
+                      <strong>✅ Debug:</strong> {products.length} productos cargados correctamente
                     </p>
                   </div>
                 )}
@@ -392,7 +387,7 @@ const CategoryDetailPage = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                   {products.map((product) => {
                     console.log(
-                      "[CategoryDetailPage] Rendering product:",
+                      "[CategoryDetailPage] 🎨 Rendering product:",
                       product._id,
                       product.name
                     );

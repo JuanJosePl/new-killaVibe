@@ -11,6 +11,8 @@ import { createCategorySchema, updateCategorySchema } from '../schema/category.s
  * @hook useCategoryActions
  * @description Hook para acciones CRUD de categorías (ADMIN ONLY)
  * 
+ * ✅ CORREGIDO: fetchBySlug ahora maneja correctamente la respuesta de la API
+ * 
  * CARACTERÍSTICAS:
  * - Validación con Yup antes de enviar
  * - Manejo de errores 400/401/403/404/409/500
@@ -193,6 +195,7 @@ const useCategoryActions = (onSuccess, onError) => {
 
   /**
    * Obtener categoría por slug
+   * ✅ CORREGIDO: Ahora maneja correctamente response.data.data
    */
   const fetchBySlug = useCallback(async (slug) => {
     if (!slug) {
@@ -204,9 +207,45 @@ const useCategoryActions = (onSuccess, onError) => {
     setError(null);
 
     try {
+      console.log('[useCategoryActions] 🔄 Fetching category by slug:', slug);
+      
       const response = await getCategoryBySlug(slug);
-      return response.data;
+      
+      console.log('[useCategoryActions] 📦 Raw response:', response);
+      
+      // ✅ CRITICAL FIX: La API retorna { success: true, data: CategoryDetailDTO }
+      // Axios ya parseó response.data, entonces:
+      // response = { success: true, data: {...} }
+      // response.data = {...CategoryDetailDTO...}
+      
+      let categoryData = null;
+      
+      // Caso 1: response tiene la estructura { success, data }
+      if (response && response.data) {
+        categoryData = response.data;
+        console.log('[useCategoryActions] ✅ Case 1: Using response.data');
+      }
+      // Caso 2: response ES directamente el CategoryDetailDTO
+      else if (response && response._id) {
+        categoryData = response;
+        console.log('[useCategoryActions] ✅ Case 2: Using response directly');
+      }
+      // Caso 3: Error - no hay datos válidos
+      else {
+        console.error('[useCategoryActions] ❌ Invalid response structure:', response);
+        throw new Error('Estructura de respuesta inválida');
+      }
+      
+      console.log('[useCategoryActions] ✅ Final categoryData:', categoryData);
+      console.log('[useCategoryActions] 📊 Category name:', categoryData?.name);
+      
+      if (!categoryData || !categoryData._id) {
+        throw new Error('Categoría no encontrada o datos incompletos');
+      }
+      
+      return categoryData;
     } catch (err) {
+      console.error('[useCategoryActions] ❌ fetchBySlug error:', err);
       throw handleError(err, 'fetch');
     } finally {
       setLoading(false);
