@@ -1,3 +1,4 @@
+// products/components/ProductCard.jsx
 import { useState } from "react";
 import {
   ShoppingCart,
@@ -16,11 +17,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// ✅ Hooks reales integrados
 import { useProductCart } from "../hooks/useProductCart";
 import { useProductWishlist } from "../hooks/useProductWishlist";
 
-// ✅ Utilidades reales
 import {
   formatPrice,
   calculateDiscountPercentage,
@@ -32,28 +31,12 @@ import {
   getAvailabilityStatus,
 } from "../utils/productHelpers";
 
-// ✅ IMPORTAR ProductGallery (el que ya funciona en ProductDetail)
-import { ProductGallery } from "./ProductGallery";
-
-/**
- * @component ProductCard
- * @description Tarjeta de producto usando ProductGallery directamente
- *
- * ✅ SOLUCIÓN DEFINITIVA:
- * - Usa ProductGallery directamente (el mismo que funciona en ProductDetail)
- * - Sin componentes intermedios
- * - Sin lógica duplicada
- * - Garantizado al 100%
- */
 export function ProductCard({
   product,
   className = "",
   showWishlistButton = true,
   variant = "default",
 }) {
-  // ============================================================================
-  // ✅ HOOKS INTERNOS
-  // ============================================================================
   const {
     isProductInCart,
     getProductQuantity,
@@ -67,14 +50,9 @@ export function ProductCard({
     loading: wishlistLoading,
   } = useProductWishlist();
 
-  // ============================================================================
-  // ✅ ESTADO LOCAL
-  // ============================================================================
   const [isHovered, setIsHovered] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
-  // ============================================================================
-  // ✅ EXTRAER DATOS DEL PRODUCTO
-  // ============================================================================
   const {
     _id,
     name,
@@ -82,22 +60,14 @@ export function ProductCard({
     price,
     comparePrice,
     image,
-    primaryImage,
     rating,
     brand,
     salesCount,
-    views,
     mainCategory,
     stock,
     isFeatured,
   } = product;
 
-    const [imageLoaded, setImageLoaded] = useState(false);
-
-
-  // ============================================================================
-  // ✅ LÓGICA DE NEGOCIO
-  // ============================================================================
   const discountPercentage = calculateDiscountPercentage(comparePrice, price);
   const isNew = isNewProduct(product);
   const lowStock = isLowStock(product);
@@ -111,18 +81,16 @@ export function ProductCard({
   const quantityInCart = getProductQuantity(_id);
   const inWishlist = isProductInWishlist(_id);
 
-  // ============================================================================
-  // ✅ HANDLERS
-  // ============================================================================
+  // ✅ FIX #1: Se elimina el guard `if (!inCart)`.
+  // El contexto ya maneja duplicados incrementando la cantidad.
+  // Ahora el botón siempre agrega/incrementa mientras haya stock y esté disponible.
   const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (!available || cartLoading) return;
 
-    if (!inCart) {
-      await addProductToCart(product, 1);
-    }
+    await addProductToCart(product, 1);
   };
 
   const handleToggleWishlist = async (e) => {
@@ -133,9 +101,6 @@ export function ProductCard({
     }
   };
 
-  // ============================================================================
-  // ✅ CTA DINÁMICO
-  // ============================================================================
   const getButtonConfig = () => {
     if (cartLoading) {
       return {
@@ -148,7 +113,8 @@ export function ProductCard({
 
     if (inCart) {
       return {
-        text: `En carrito (${quantityInCart})`,
+        // ✅ FIX: ahora muestra la cantidad y permite seguir agregando
+        text: `En carrito (${quantityInCart}) · +1`,
         disabled: false,
         className: "bg-green-600 text-white hover:bg-green-700",
         icon: Check,
@@ -207,7 +173,7 @@ export function ProductCard({
             !available ? "opacity-70" : ""
           }`}
         >
-          {/* ✅ BADGES SUPERIORES */}
+          {/* BADGES SUPERIORES */}
           <div className="absolute top-2 left-2 z-20 flex flex-wrap gap-1.5 max-w-[calc(100%-80px)]">
             {discountPercentage > 0 && (
               <div className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-1 rounded-full text-[10px] font-bold shadow-md">
@@ -241,7 +207,7 @@ export function ProductCard({
             )}
           </div>
 
-          {/* ✅ WISHLIST BUTTON */}
+          {/* WISHLIST BUTTON */}
           {showWishlistButton && (
             <div className="absolute top-2 right-2 z-20">
               <button
@@ -264,17 +230,16 @@ export function ProductCard({
               </button>
             </div>
           )}
-   {/* ✅ CONTENEDOR DE IMAGEN - SIMPLIFICADO */}
+
+          {/* CONTENEDOR DE IMAGEN */}
           <div className="relative overflow-hidden">
             <div className="relative aspect-square bg-white">
-              {/* Loading State */}
               {!imageLoaded && (
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 animate-pulse flex items-center justify-center">
                   <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-primary"></div>
                 </div>
               )}
 
-              {/* Imagen del producto */}
               {image ? (
                 <img
                   src={image}
@@ -292,7 +257,6 @@ export function ProductCard({
               )}
             </div>
 
-            {/* Hover Overlay encima de la galería */}
             <div
               className={`absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-300 pointer-events-none ${
                 isHovered ? "opacity-100" : "opacity-0"
@@ -310,7 +274,6 @@ export function ProductCard({
               </div>
             </div>
 
-            {/* Quick View Button - Ahora con pointer-events-auto para que funcione */}
             <div
               className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
                 isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -323,9 +286,8 @@ export function ProductCard({
             </div>
           </div>
 
-          {/* ✅ INFORMACIÓN DEL PRODUCTO */}
+          {/* INFORMACIÓN DEL PRODUCTO */}
           <div className="p-3 space-y-2">
-            {/* Brand/Category */}
             {brand ? (
               <div className="flex items-center gap-1.5">
                 <Package className="h-3 w-3 text-primary/70" />
@@ -341,12 +303,10 @@ export function ProductCard({
               )
             )}
 
-            {/* Nombre del producto */}
             <h3 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 group-hover:text-primary transition-colors min-h-[2.5rem]">
               {name}
             </h3>
 
-            {/* Rating */}
             {averageRating > 0 && (
               <div className="flex items-center gap-1.5">
                 <div className="flex items-center text-yellow-400">
@@ -367,7 +327,6 @@ export function ProductCard({
               </div>
             )}
 
-            {/* Precio */}
             <div className="pt-1">
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
@@ -387,7 +346,6 @@ export function ProductCard({
               )}
             </div>
 
-            {/* ✅ BOTÓN DE AGREGAR AL CARRITO */}
             <button
               onClick={handleAddToCart}
               disabled={buttonConfig.disabled}
@@ -397,7 +355,6 @@ export function ProductCard({
               <span>{buttonConfig.text}</span>
             </button>
 
-            {/* Estado de stock */}
             {available && availabilityStatus === "low_stock" && (
               <div className="text-center">
                 <span className="text-[10px] text-orange-600 font-semibold flex items-center justify-center gap-1">

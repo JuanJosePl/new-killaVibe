@@ -1,7 +1,7 @@
+// cart/hooks/useCartActions.js
 import { useState, useCallback } from "react";
 import { useCartContext } from "../context/CartContext";
 import {
-  validateAddItem,
   validateUpdateQuantity,
   validateCoupon,
   validateShippingAddress,
@@ -11,11 +11,15 @@ import {
 
 /**
  * @hook useCartActions
- * @description Hook para acciones de carrito (UI + sistema)
+ *
+ * ✅ FIX: addToCart ya NO valida con addItemSchema ni llama a validateAddItem.
+ * La normalización del payload (productId, quantity, attributes) se hace aquí
+ * antes de delegar al contexto, que recibe el objeto producto completo.
+ * Esto evita que Yup con stripUnknown destruya los datos del producto
+ * necesarios para el modo guest (name, price, images, slug, stock...).
  */
 export const useCartActions = (onSuccess, onError) => {
   const {
-    // UI actions
     addItem,
     updateItem,
     removeItem,
@@ -23,17 +27,12 @@ export const useCartActions = (onSuccess, onError) => {
     applyCoupon,
     updateShippingAddress,
     updateShippingMethod,
-
-    // 🔥 SYSTEM actions (guest → user)
     migrateGuestCartToUser,
     clearGuestCart,
-
-    // Estado global del context
     loading: contextLoading,
     error: contextError,
   } = useCartContext();
 
-  const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState(null);
 
   // ============================================================================
@@ -43,24 +42,22 @@ export const useCartActions = (onSuccess, onError) => {
   const executeAction = useCallback(
     async (action, successMessage) => {
       try {
-        setActionLoading(true);
         setActionError(null);
-
         const result = await action();
-
-        onSuccess?.(successMessage || result?.message);
+        if (onSuccess && successMessage) {
+          onSuccess(successMessage);
+        }
         return result;
       } catch (err) {
         const errorMessage =
           err.response?.data?.message ||
           err.message ||
           "Error al realizar la acción";
-
         setActionError(errorMessage);
-        onError?.(errorMessage, err);
+        if (onError) {
+          onError(errorMessage, err);
+        }
         throw err;
-      } finally {
-        setActionLoading(false);
       }
     },
     [onSuccess, onError]
@@ -70,24 +67,74 @@ export const useCartActions = (onSuccess, onError) => {
   // ACCIONES UI
   // ============================================================================
 
+  /**
+   * ✅ FIX PRINCIPAL: addToCart
+   *
+   * Acepta dos formas de llamada:
+   *   1. addToCart(productObject, quantity)          ← desde ProductCard vía useProductCart
+   *   2. addToCart({ productId, quantity, attributes }) ← llamada directa
+   *
+   * En ambos casos normaliza antes de delegar a CartContext.addItem,
+   * que recibe (productData completo, quantity) para poder construir
+   * el item correctamente tanto en modo guest como autenticado.
+   */
   const addToCart = useCallback(
-    async (itemData) => {
-      try {
-        const validatedData = await validateAddItem(itemData);
+    async (productOrPayload, quantityArg = 1) => {
+      // --- Normalizar entrada ---
+      let productData;
+      let quantity;
 
-        return await executeAction(
-          () => addItem(validatedData),
-          "Producto agregado al carrito"
-        );
-      } catch (err) {
-        if (err.name === "ValidationError") {
-          const errors = formatValidationErrors(err);
-          const msg = Object.values(errors)[0];
-          setActionError(msg);
-          onError?.(msg, err);
-        }
-        throw err;
+      if (
+        productOrPayload &&
+        typeof productOrPayload === "object" &&
+        // Si viene con _id o id, es un objeto producto completo
+        (productOrPayload._id || productOrPayload.id)
+      ) {
+        // Forma 1: objeto producto completo
+        productData = productOrPayload;
+        quantity = Number(quantityArg) || 1;
+      } else if (
+        productOrPayload &&
+        typeof productOrPayload === "object" &&
+        productOrPayload.productId
+      ) {
+        // Forma 2: payload ya construido { productId, quantity, attributes }
+        // En este caso productData tendrá solo lo mínimo para modo autenticado
+        productData = {
+          _id: productOrPayload.productId,
+          id: productOrPayload.productId,
+          attributes: productOrPayload.attributes || {},
+        };
+        quantity =
+          Number(productOrPayload.quantity) || Number(quantityArg) || 1;
+      } else {
+        const msg = "Datos de producto inválidos para agregar al carrito";
+        setActionError(msg);
+        if (onError) onError(msg, new Error(msg));
+        throw new Error(msg);
       }
+
+      // --- Validación mínima sin Yup para no destruir datos ---
+      const productId = productData._id || productData.id;
+      if (!productId) {
+        const msg = "ID de producto requerido";
+        setActionError(msg);
+        if (onError) onError(msg, new Error(msg));
+        throw new Error(msg);
+      }
+
+      if (quantity < 1 || quantity > 9999) {
+        const msg = `Cantidad debe estar entre 1 y 9999`;
+        setActionError(msg);
+        if (onError) onError(msg, new Error(msg));
+        throw new Error(msg);
+      }
+
+      // --- Delegar al contexto con datos completos ---
+      return await executeAction(
+        () => addItem(productData, quantity),
+        "Producto agregado al carrito"
+      );
     },
     [addItem, executeAction, onError]
   );
@@ -99,7 +146,6 @@ export const useCartActions = (onSuccess, onError) => {
           quantity,
           attributes,
         });
-
         return await executeAction(
           () => updateItem(productId, validatedData),
           "Cantidad actualizada"
@@ -107,9 +153,9 @@ export const useCartActions = (onSuccess, onError) => {
       } catch (err) {
         if (err.name === "ValidationError") {
           const errors = formatValidationErrors(err);
-          const msg = Object.values(errors)[0];
+          const msg = Object.values(errors)[0] || "Error de validación";
           setActionError(msg);
-          onError?.(msg, err);
+          if (onError) onError(msg, err);
         }
         throw err;
       }
@@ -135,7 +181,6 @@ export const useCartActions = (onSuccess, onError) => {
     async (code) => {
       try {
         const validatedData = await validateCoupon({ code });
-
         return await executeAction(
           () => applyCoupon(validatedData.code),
           "Cupón aplicado correctamente"
@@ -143,9 +188,9 @@ export const useCartActions = (onSuccess, onError) => {
       } catch (err) {
         if (err.name === "ValidationError") {
           const errors = formatValidationErrors(err);
-          const msg = Object.values(errors)[0];
+          const msg = Object.values(errors)[0] || "Error de validación";
           setActionError(msg);
-          onError?.(msg, err);
+          if (onError) onError(msg, err);
         }
         throw err;
       }
@@ -157,7 +202,6 @@ export const useCartActions = (onSuccess, onError) => {
     async (addressData) => {
       try {
         const validatedData = await validateShippingAddress(addressData);
-
         return await executeAction(
           () => updateShippingAddress(validatedData),
           "Dirección de envío actualizada"
@@ -165,9 +209,9 @@ export const useCartActions = (onSuccess, onError) => {
       } catch (err) {
         if (err.name === "ValidationError") {
           const errors = formatValidationErrors(err);
-          const msg = Object.values(errors)[0];
+          const msg = Object.values(errors)[0] || "Error de validación";
           setActionError(msg);
-          onError?.(msg, err);
+          if (onError) onError(msg, err);
         }
         throw err;
       }
@@ -179,7 +223,6 @@ export const useCartActions = (onSuccess, onError) => {
     async (shippingData) => {
       try {
         const validatedData = await validateShippingMethod(shippingData);
-
         return await executeAction(
           () => updateShippingMethod(validatedData),
           "Método de envío actualizado"
@@ -187,9 +230,9 @@ export const useCartActions = (onSuccess, onError) => {
       } catch (err) {
         if (err.name === "ValidationError") {
           const errors = formatValidationErrors(err);
-          const msg = Object.values(errors)[0];
+          const msg = Object.values(errors)[0] || "Error de validación";
           setActionError(msg);
-          onError?.(msg, err);
+          if (onError) onError(msg, err);
         }
         throw err;
       }
@@ -197,20 +240,11 @@ export const useCartActions = (onSuccess, onError) => {
     [updateShippingMethod, executeAction, onError]
   );
 
-  // ============================================================================
-  // HELPERS
-  // ============================================================================
-
   const clearError = useCallback(() => {
     setActionError(null);
   }, []);
 
-  // ============================================================================
-  // RETURN
-  // ============================================================================
-
   return {
-    // UI actions
     addToCart,
     updateQuantity,
     removeFromCart,
@@ -218,16 +252,10 @@ export const useCartActions = (onSuccess, onError) => {
     applyCoupon: applyCouponCode,
     updateAddress,
     updateShipping,
-
-    // 🔥 Sync (para syncManager)
     syncGuestCartToUser: migrateGuestCartToUser,
     clearGuestCart,
-
-    // Estado
-    loading: actionLoading || contextLoading,
+    loading: contextLoading,
     error: actionError || contextError,
-
-    // Helpers
     clearError,
   };
 };

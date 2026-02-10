@@ -1,109 +1,153 @@
+// cart/utils/cartHelpers.js
+
 import {
   SHIPPING_METHOD_LABELS,
   SHIPPING_COSTS,
   COUPON_TYPES,
-  CART_THRESHOLDS
-} from '../types/cart.types';
+  CART_THRESHOLDS,
+  DEFAULT_TAX_RATE,
+  DEFAULT_SHIPPING_COST,
+} from "../types/cart.types";
 
 /**
  * @module CartHelpers
  * @description Funciones utilidad para el módulo Cart
- * 
- * 25+ funciones para:
- * - Cálculos de totales
- * - Formateo de precios
- * - Validaciones
- * - Comparaciones
- * - Helpers de UI
  */
 
 // ============================================================================
 // CÁLCULOS DE TOTALES
 // ============================================================================
 
-/**
- * Calcula subtotal del carrito
- * @param {Array} items - Items del carrito
- * @returns {number} Subtotal
- */
 export const calculateSubtotal = (items = []) => {
+  if (!Array.isArray(items)) return 0;
   return items.reduce((total, item) => {
-    return total + (item.price * item.quantity);
+    const price = Number(item.price) || 0;
+    const quantity = Number(item.quantity) || 0;
+    return total + price * quantity;
   }, 0);
 };
 
-/**
- * Calcula descuento de cupón
- * @param {number} subtotal - Subtotal del carrito
- * @param {Object} coupon - Objeto cupón
- * @returns {number} Monto de descuento
- */
 export const calculateCouponDiscount = (subtotal, coupon) => {
-  if (!coupon?.code) return 0;
-
-  if (coupon.type === COUPON_TYPES.PERCENTAGE) {
-    return (subtotal * coupon.discount) / 100;
-  } else if (coupon.type === COUPON_TYPES.FIXED) {
-    return Math.min(coupon.discount, subtotal);
+  if (!coupon || !coupon.code || typeof coupon.discount !== "number") {
+    return 0;
   }
-
+  const subtotalNum = Number(subtotal) || 0;
+  if (coupon.type === COUPON_TYPES.PERCENTAGE) {
+    const percentage = Math.min(Math.max(coupon.discount, 0), 100);
+    return (subtotalNum * percentage) / 100;
+  } else if (coupon.type === COUPON_TYPES.FIXED) {
+    return Math.min(Math.max(coupon.discount, 0), subtotalNum);
+  }
   return 0;
 };
 
-/**
- * Calcula descuento en envío
- * @param {number} shippingCost - Costo de envío
- * @param {Object} coupon - Objeto cupón
- * @returns {number} Descuento en envío
- */
 export const calculateShippingDiscount = (shippingCost, coupon) => {
-  if (!coupon?.code || coupon.type !== COUPON_TYPES.SHIPPING) return 0;
-  return Math.min(coupon.discount, shippingCost);
+  if (!coupon || !coupon.code || coupon.type !== COUPON_TYPES.SHIPPING) {
+    return 0;
+  }
+  const shippingNum = Number(shippingCost) || 0;
+  const discountNum = Number(coupon.discount) || 0;
+  return Math.min(discountNum, shippingNum);
 };
 
-/**
- * Calcula impuestos
- * @param {number} amount - Monto base
- * @param {number} taxRate - Tasa de impuesto (%)
- * @returns {number} Monto de impuestos
- */
-export const calculateTax = (amount, taxRate = 0) => {
-  return (amount * taxRate) / 100;
+export const calculateTax = (amount, taxRate = DEFAULT_TAX_RATE) => {
+  const amountNum = Number(amount) || 0;
+  const rateNum = Number(taxRate) || 0;
+  return (amountNum * rateNum) / 100;
 };
 
-/**
- * Calcula total del carrito
- * @param {Object} cart - Objeto carrito completo
- * @returns {number} Total
- */
 export const calculateTotal = (cart) => {
   if (!cart) return 0;
-
-  const subtotal = cart.subtotal || calculateSubtotal(cart.items);
+  const subtotal = Number(cart.subtotal) || calculateSubtotal(cart.items);
   const couponDiscount = calculateCouponDiscount(subtotal, cart.coupon);
-  const shippingDiscount = calculateShippingDiscount(cart.shippingCost, cart.coupon);
-  
-  const beforeTax = subtotal - couponDiscount + (cart.shippingCost - shippingDiscount);
+  const shippingCost = Number(cart.shippingCost) || Number(cart.shipping) || 0;
+  const shippingDiscount = calculateShippingDiscount(shippingCost, cart.coupon);
+  const beforeTax =
+    subtotal - couponDiscount + (shippingCost - shippingDiscount);
   const tax = calculateTax(beforeTax, cart.taxRate);
-  
   return Math.max(0, beforeTax + tax);
 };
 
-/**
- * Calcula cantidad total de items
- * @param {Array} items - Items del carrito
- * @returns {number} Cantidad total
- */
-export const calculateItemCount = (items = []) => {
-  return items.reduce((count, item) => count + item.quantity, 0);
+export const normalizeCartStructure = (items = [], options = {}) => {
+  const {
+    coupon = null,
+    shippingMethod = "standard",
+    shippingAddress = null,
+    taxRate = DEFAULT_TAX_RATE,
+  } = options;
+
+  const subtotal = calculateSubtotal(items);
+  const discount = calculateCouponDiscount(subtotal, coupon);
+  const shippingCost = SHIPPING_COSTS[shippingMethod] || 0;
+  const shippingDiscount = calculateShippingDiscount(shippingCost, coupon);
+  const shipping = shippingCost - shippingDiscount;
+  const beforeTax = subtotal - discount + shipping;
+  const tax = calculateTax(beforeTax, taxRate);
+  const total = Math.max(0, beforeTax + tax);
+
+  return {
+    items,
+    subtotal,
+    tax,
+    shipping,
+    shippingCost,
+    discount,
+    total,
+    coupon,
+    shippingMethod,
+    shippingAddress,
+    taxRate,
+  };
 };
 
 /**
- * Calcula cantidad de productos únicos
- * @param {Array} items - Items del carrito
- * @returns {number} Productos únicos
+ * ✅ INTEGRADO del funcional: calcula totales con lógica COP real del proyecto.
+ * Envío gratis a partir de 150.000 COP, costo base 15.000 COP.
+ * Esta función es usada por CartContext en modo guest para garantizar
+ * que los totales mostrados sean consistentes con CartSummary.
+ *
+ * @param {Array} items - Items del carrito (array plano)
+ * @returns {Object} Carrito con totales calculados
  */
+export const calculateLocalCartTotals = (items = []) => {
+  if (!Array.isArray(items)) items = [];
+
+  const subtotal = items.reduce((acc, item) => {
+    const price = Number(item.product?.price || item.price || 0);
+    const qty = Number(item.quantity || 0);
+    return acc + price * qty;
+  }, 0);
+
+  const shippingCost =
+    subtotal >= CART_THRESHOLDS.MIN_FREE_SHIPPING ? 0 : DEFAULT_SHIPPING_COST;
+
+  const taxRate = DEFAULT_TAX_RATE;
+  const tax = subtotal * (taxRate / 100);
+
+  const total = subtotal + shippingCost;
+
+  return {
+    items,
+    subtotal,
+    tax,
+    shippingCost,
+    shipping: shippingCost,
+    discount: 0,
+    total,
+    coupon: null,
+    shippingMethod: "standard",
+    shippingAddress: null,
+    taxRate,
+  };
+};
+
+export const calculateItemCount = (items = []) => {
+  if (!Array.isArray(items)) return 0;
+  return items.reduce((count, item) => count + (Number(item.quantity) || 0), 0);
+};
+
 export const calculateUniqueItems = (items = []) => {
+  if (!Array.isArray(items)) return 0;
   return items.length;
 };
 
@@ -111,27 +155,18 @@ export const calculateUniqueItems = (items = []) => {
 // FORMATEO DE PRECIOS
 // ============================================================================
 
-/**
- * Formatea precio a moneda
- * @param {number} amount - Monto
- * @param {string} currency - Código de moneda
- * @returns {string} Precio formateado
- */
-export const formatPrice = (amount, currency = 'USD') => {
-  return new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: currency
-  }).format(amount);
+export const formatPrice = (amount, currency = "COP") => {
+  const num = Number(amount) || 0;
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(num);
 };
 
-/**
- * Formatea descuento según tipo
- * @param {Object} coupon - Objeto cupón
- * @returns {string} Descuento formateado
- */
 export const formatDiscount = (coupon) => {
-  if (!coupon) return '';
-
+  if (!coupon || !coupon.code) return "";
   if (coupon.type === COUPON_TYPES.PERCENTAGE) {
     return `-${coupon.discount}%`;
   } else if (coupon.type === COUPON_TYPES.FIXED) {
@@ -139,19 +174,14 @@ export const formatDiscount = (coupon) => {
   } else if (coupon.type === COUPON_TYPES.SHIPPING) {
     return `Envío gratis`;
   }
-
-  return '';
+  return "";
 };
 
-/**
- * Formatea porcentaje de ahorro
- * @param {number} original - Precio original
- * @param {number} final - Precio final
- * @returns {string} Porcentaje de ahorro
- */
 export const formatSavingsPercentage = (original, final) => {
-  if (original <= final) return '';
-  const savings = ((original - final) / original) * 100;
+  const orig = Number(original) || 0;
+  const fin = Number(final) || 0;
+  if (orig <= fin) return "";
+  const savings = ((orig - fin) / orig) * 100;
   return `${savings.toFixed(0)}%`;
 };
 
@@ -159,130 +189,121 @@ export const formatSavingsPercentage = (original, final) => {
 // VALIDACIONES Y VERIFICACIONES
 // ============================================================================
 
-/**
- * Verifica si el carrito está vacío
- * @param {Object} cart - Objeto carrito
- * @returns {boolean}
- */
 export const isCartEmpty = (cart) => {
   return !cart || !cart.items || cart.items.length === 0;
 };
 
-/**
- * Verifica si hay cupón aplicado
- * @param {Object} cart - Objeto carrito
- * @returns {boolean}
- */
 export const hasCouponApplied = (cart) => {
-  return !!(cart?.coupon?.code);
+  return !!cart?.coupon?.code;
 };
 
-/**
- * Verifica si cumple con envío gratis
- * @param {number} subtotal - Subtotal
- * @param {number} threshold - Umbral para envío gratis
- * @returns {boolean}
- */
-export const qualifiesForFreeShipping = (subtotal, threshold = CART_THRESHOLDS.MIN_FREE_SHIPPING) => {
-  return subtotal >= threshold;
+export const qualifiesForFreeShipping = (
+  subtotal,
+  threshold = CART_THRESHOLDS.MIN_FREE_SHIPPING
+) => {
+  const sub = Number(subtotal) || 0;
+  const thres = Number(threshold) || 0;
+  return sub >= thres;
 };
 
-/**
- * Calcula cuánto falta para envío gratis
- * @param {number} subtotal - Subtotal
- * @param {number} threshold - Umbral
- * @returns {number} Monto faltante
- */
-export const amountForFreeShipping = (subtotal, threshold = CART_THRESHOLDS.MIN_FREE_SHIPPING) => {
-  return Math.max(0, threshold - subtotal);
+export const amountForFreeShipping = (
+  subtotal,
+  threshold = CART_THRESHOLDS.MIN_FREE_SHIPPING
+) => {
+  const sub = Number(subtotal) || 0;
+  const thres = Number(threshold) || 0;
+  return Math.max(0, thres - sub);
 };
 
-/**
- * Verifica si producto está en carrito
- * @param {Array} items - Items del carrito
- * @param {string} productId - ID del producto
- * @param {Object} attributes - Atributos opcionales
- * @returns {boolean}
- */
 export const isProductInCart = (items = [], productId, attributes = {}) => {
-  return items.some(item => 
-    item.product._id === productId &&
-    JSON.stringify(item.attributes) === JSON.stringify(attributes)
-  );
+  if (!Array.isArray(items) || !productId) return false;
+  return items.some((item) => {
+    const itemProductId =
+      item.product?._id || item.product?.id || item.productId;
+    if (itemProductId !== productId) return false;
+    return areAttributesEqual(item.attributes, attributes);
+  });
 };
 
-/**
- * Encuentra item en carrito
- * @param {Array} items - Items del carrito
- * @param {string} productId - ID del producto
- * @param {Object} attributes - Atributos
- * @returns {Object|null} Item encontrado
- */
 export const findCartItem = (items = [], productId, attributes = {}) => {
-  return items.find(item =>
-    item.product._id === productId &&
-    JSON.stringify(item.attributes) === JSON.stringify(attributes)
-  ) || null;
+  if (!Array.isArray(items) || !productId) return null;
+  return (
+    items.find((item) => {
+      const itemProductId =
+        item.product?._id || item.product?.id || item.productId;
+      if (itemProductId !== productId) return false;
+      return areAttributesEqual(item.attributes, attributes);
+    }) || null
+  );
 };
 
-/**
- * Verifica si hay productos con bajo stock
- * @param {Array} items - Items del carrito
- * @returns {boolean}
- */
 export const hasLowStockItems = (items = []) => {
-  return items.some(item => 
-    item.product.stock > 0 && 
-    item.product.stock <= CART_THRESHOLDS.LOW_STOCK_WARNING
-  );
+  if (!Array.isArray(items)) return false;
+  return items.some((item) => {
+    const stock = Number(item.product?.stock) || 0;
+    return stock > 0 && stock <= CART_THRESHOLDS.LOW_STOCK_WARNING;
+  });
 };
 
-/**
- * Obtiene items con bajo stock
- * @param {Array} items - Items del carrito
- * @returns {Array} Items con bajo stock
- */
 export const getLowStockItems = (items = []) => {
-  return items.filter(item =>
-    item.product.stock > 0 &&
-    item.product.stock <= CART_THRESHOLDS.LOW_STOCK_WARNING
-  );
+  if (!Array.isArray(items)) return [];
+  return items.filter((item) => {
+    const stock = Number(item.product?.stock) || 0;
+    return stock > 0 && stock <= CART_THRESHOLDS.LOW_STOCK_WARNING;
+  });
 };
 
 // ============================================================================
 // HELPERS DE UI
 // ============================================================================
 
-/**
- * Obtiene label del método de envío
- * @param {string} method - Método de envío
- * @returns {string} Label
- */
 export const getShippingMethodLabel = (method) => {
   return SHIPPING_METHOD_LABELS[method] || method;
 };
 
-/**
- * Obtiene costo del método de envío
- * @param {string} method - Método de envío
- * @returns {number} Costo
- */
 export const getShippingCost = (method) => {
   return SHIPPING_COSTS[method] || 0;
 };
 
 /**
- * Genera resumen del carrito para checkout
- * @param {Object} cart - Objeto carrito
- * @returns {Object} Resumen
+ * ✅ INTEGRADO del funcional: lógica COP real para el resumen del checkout.
+ * Envío gratis a partir de 150.000 COP, costo base 15.000 COP.
+ * Mantiene todos los campos del contrato original.
  */
 export const generateCartSummary = (cart) => {
-  const subtotal = cart.subtotal || calculateSubtotal(cart.items);
-  const discount = calculateCouponDiscount(subtotal, cart.coupon);
-  const shippingDiscount = calculateShippingDiscount(cart.shippingCost, cart.coupon);
-  const shipping = cart.shippingCost - shippingDiscount;
-  const tax = calculateTax(subtotal - discount + shipping, cart.taxRate);
-  const total = calculateTotal(cart);
+  if (!cart) {
+    return {
+      subtotal: 0,
+      discount: 0,
+      shipping: 0,
+      shippingDiscount: 0,
+      tax: 0,
+      total: 0,
+      itemCount: 0,
+      uniqueItems: 0,
+      savings: 0,
+      freeShippingRemaining: CART_THRESHOLDS.MIN_FREE_SHIPPING,
+    };
+  }
+
+  const subtotal = Number(cart.subtotal) || calculateSubtotal(cart.items);
+  const discount =
+    Number(cart.discount) || calculateCouponDiscount(subtotal, cart.coupon);
+  const shippingCostBase = Number(cart.shippingCost) || DEFAULT_SHIPPING_COST;
+  // ✅ Lógica real del proyecto: envío gratis a partir de MIN_FREE_SHIPPING
+  const isFreeShipping = subtotal >= CART_THRESHOLDS.MIN_FREE_SHIPPING;
+  const shippingDiscount = calculateShippingDiscount(
+    shippingCostBase,
+    cart.coupon
+  );
+  const shipping = isFreeShipping
+    ? 0
+    : Math.max(0, shippingCostBase - shippingDiscount);
+
+  const tax =
+    Number(cart.tax) ||
+    calculateTax(subtotal - discount + shipping, cart.taxRate);
+  const total = subtotal - discount + shipping;
 
   return {
     subtotal,
@@ -293,57 +314,55 @@ export const generateCartSummary = (cart) => {
     total,
     itemCount: calculateItemCount(cart.items),
     uniqueItems: calculateUniqueItems(cart.items),
-    savings: discount + shippingDiscount
+    savings: discount + shippingDiscount,
+    freeShippingRemaining: Math.max(
+      0,
+      CART_THRESHOLDS.MIN_FREE_SHIPPING - subtotal
+    ),
   };
 };
 
-/**
- * Formatea atributos para display
- * @param {Object} attributes - Atributos
- * @returns {string} String formateado
- */
 export const formatAttributes = (attributes = {}) => {
+  if (!attributes || typeof attributes !== "object") return "";
   const parts = [];
-  
   if (attributes.size) parts.push(`Talla: ${attributes.size}`);
   if (attributes.color) parts.push(`Color: ${attributes.color}`);
   if (attributes.material) parts.push(`Material: ${attributes.material}`);
-  
-  return parts.join(' | ');
+  return parts.join(" | ");
 };
 
-/**
- * Genera mensaje de stock
- * @param {number} stock - Stock disponible
- * @returns {string} Mensaje
- */
 export const getStockMessage = (stock) => {
-  if (stock === 0) return 'Sin stock';
-  if (stock <= CART_THRESHOLDS.LOW_STOCK_WARNING) {
-    return `¡Solo quedan ${stock}!`;
+  const stockNum = Number(stock) || 0;
+  if (stockNum === 0) return "Sin stock";
+  if (stockNum <= CART_THRESHOLDS.LOW_STOCK_WARNING) {
+    return `¡Solo quedan ${stockNum}!`;
   }
-  return 'En stock';
+  return "En stock";
 };
 
-/**
- * Valida cupón por fecha
- * @param {Object} coupon - Objeto cupón
- * @returns {boolean}
- */
 export const isCouponValid = (coupon) => {
-  if (!coupon) return false;
+  if (!coupon || !coupon.code) return false;
   if (!coupon.expiresAt) return true;
   return new Date(coupon.expiresAt) > new Date();
 };
 
-/**
- * Compara dos sets de atributos
- * @param {Object} attr1 - Atributos 1
- * @param {Object} attr2 - Atributos 2
- * @returns {boolean}
- */
 export const areAttributesEqual = (attr1 = {}, attr2 = {}) => {
-  return JSON.stringify(attr1) === JSON.stringify(attr2);
+  const a1 = attr1 || {};
+  const a2 = attr2 || {};
+  const keys1 = Object.keys(a1).sort();
+  const keys2 = Object.keys(a2).sort();
+  if (keys1.length !== keys2.length) return false;
+  return keys1.every((key, index) => {
+    return keys2[index] === key && a1[key] === a2[key];
+  });
+};
+
+export const generateCartItemKey = (productId, attributes = {}) => {
+  const attrKeys = Object.keys(attributes || {}).sort();
+  const attrString = attrKeys
+    .map((key) => `${key}:${attributes[key]}`)
+    .join("|");
+  return `${productId}${attrString ? `::${attrString}` : ""}`;
 };
 
 export default {
@@ -352,6 +371,8 @@ export default {
   calculateShippingDiscount,
   calculateTax,
   calculateTotal,
+  normalizeCartStructure,
+  calculateLocalCartTotals,
   calculateItemCount,
   calculateUniqueItems,
   formatPrice,
@@ -371,5 +392,6 @@ export default {
   formatAttributes,
   getStockMessage,
   isCouponValid,
-  areAttributesEqual
+  areAttributesEqual,
+  generateCartItemKey,
 };

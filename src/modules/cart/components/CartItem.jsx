@@ -1,24 +1,20 @@
+// cart/components/CartItem.jsx
+
 import React, { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { formatPrice, formatAttributes, getStockMessage } from '../utils/cartHelpers';
 import { CART_LIMITS } from '../types/cart.types';
 
 /**
  * @component CartItem
  * @description Tarjeta individual de producto en el carrito
- * 
- * PROPS:
- * @param {Object} item - Item del carrito
- * @param {Function} onUpdateQuantity - Callback para actualizar cantidad
- * @param {Function} onRemove - Callback para eliminar
- * @param {boolean} loading - Estado de carga
- * @param {boolean} disabled - Deshabilitar acciones
  */
 const CartItem = ({
   item,
   onUpdateQuantity,
   onRemove,
   loading = false,
-  disabled = false
+  disabled = false,
 }) => {
   const [quantity, setQuantity] = useState(item.quantity);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -33,22 +29,19 @@ const CartItem = ({
   // ============================================================================
 
   const handleQuantityChange = async (newQuantity) => {
-    if (newQuantity < CART_LIMITS.MIN_QUANTITY || newQuantity > CART_LIMITS.MAX_QUANTITY) {
-      return;
-    }
+    if (newQuantity < 1 || newQuantity > CART_LIMITS.MAX_QUANTITY) return;
 
-    if (newQuantity > product.stock && product.trackQuantity) {
-      alert(`Solo hay ${product.stock} unidades disponibles`);
+    // ✅ FIX: toast estaba siendo llamado sin import en ambas versiones
+    if (product.stock && newQuantity > product.stock) {
+      toast.error(`Solo hay ${product.stock} unidades disponibles`);
       return;
     }
 
     setIsUpdating(true);
-    setQuantity(newQuantity);
-
     try {
       await onUpdateQuantity(product._id, newQuantity, item.attributes);
+      setQuantity(newQuantity);
     } catch (error) {
-      // Revertir cantidad en caso de error
       setQuantity(item.quantity);
     } finally {
       setIsUpdating(false);
@@ -75,18 +68,31 @@ const CartItem = ({
   // RENDER
   // ============================================================================
 
+  // ✅ INTEGRADO: compatibilidad con ambas estructuras de imagen
+  // El funcional usaba product.images[0].url
+  // El actual puede tener imágenes como strings o como objetos { url }
+  const getImageSrc = () => {
+    if (!product.images || product.images.length === 0) return null;
+    const first = product.images[0];
+    if (typeof first === 'string') return first;
+    if (first?.url) return first.url;
+    return null;
+  };
+
+  const imageSrc = getImageSrc();
+
   return (
-    <div className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+    <div className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow relative">
       {/* Imagen del Producto */}
       <div className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-md overflow-hidden">
-        {product.images?.[0]?.url ? (
+        {imageSrc ? (
           <img
-            src={product.images[0].url}
+            src={imageSrc}
             alt={product.name}
             className="w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs text-center">
             Sin imagen
           </div>
         )}
@@ -99,7 +105,7 @@ const CartItem = ({
             <h3 className="font-semibold text-gray-900 truncate">
               {product.name}
             </h3>
-            
+
             {/* Atributos */}
             {item.attributes && Object.keys(item.attributes).length > 0 && (
               <p className="text-sm text-gray-500 mt-1">
@@ -165,17 +171,19 @@ const CartItem = ({
               disabled={disabled || loading || isUpdating}
               className="w-16 text-center border border-gray-300 rounded-md py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               min={CART_LIMITS.MIN_QUANTITY}
-              max={Math.min(CART_LIMITS.MAX_QUANTITY, product.stock || CART_LIMITS.MAX_QUANTITY)}
+              max={Math.min(
+                CART_LIMITS.MAX_QUANTITY,
+                product.stock || CART_LIMITS.MAX_QUANTITY
+              )}
             />
 
             <button
               onClick={handleIncrement}
               disabled={
-                disabled || 
-                loading || 
-                isUpdating || 
-                quantity >= CART_LIMITS.MAX_QUANTITY ||
-                (product.trackQuantity && quantity >= product.stock)
+                disabled ||
+                loading ||
+                isUpdating ||
+                (product.stock ? quantity >= product.stock : false)
               }
               className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Aumentar cantidad"

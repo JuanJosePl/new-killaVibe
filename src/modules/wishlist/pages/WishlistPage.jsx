@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import  useWishlist  from '../../wishlist/hooks/useWishlist';
-import  useWishlistActions  from '../../wishlist/hooks/useWishlistActions';
-import  WishlistGrid  from '../../wishlist/components/WishlistGrid';
+import useWishlist from '../../wishlist/hooks/useWishlist';
+import useWishlistActions from '../../wishlist/hooks/useWishlistActions';
+import WishlistGrid from '../../wishlist/components/WishlistGrid';
 import { formatPrice } from '../../wishlist/utils/wishlistHelpers';
 
 /**
  * @page WishlistPage
  * @description Página completa de Wishlist
  * 
- * Características:
- * - Muestra todos los items
- * - Filtros por disponibilidad y cambios de precio
- * - Acciones bulk (mover múltiples a carrito)
- * - Resumen de ahorros
- * - Estados de carga y error
+ * ✅ CORREGIDO:
+ * - Modal de confirmación con overlay funcional
+ * - Sin redirección a /auth/login
+ * - Click outside cierra el modal
+ * - Loading states mejorados
  */
 const WishlistPage = () => {
   const navigate = useNavigate();
@@ -39,12 +38,11 @@ const WishlistPage = () => {
   } = useWishlistActions(
     // onSuccess
     (message) => {
-      // Aquí podrías mostrar una notificación toast
-      console.log('Éxito:', message);
+      console.log('✅ Éxito:', message);
     },
     // onError
     (error) => {
-      console.error('Error:', error);
+      console.error('❌ Error:', error);
     }
   );
 
@@ -69,11 +67,13 @@ const WishlistPage = () => {
 
   const filteredItems = getFilteredItems();
 
-  // Handlers
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
   const handleRemoveItem = async (productId) => {
     try {
       await removeFromWishlist(productId);
-      // Limpiar selección si el item estaba seleccionado
       setSelectedItems(prev => prev.filter(id => id !== productId));
     } catch (err) {
       console.error('Error removing item:', err);
@@ -110,6 +110,7 @@ const WishlistPage = () => {
   };
 
   const handleToggleSelect = (productId) => {
+    if (!productId) return; // Evitar estados inválidos
     setSelectedItems(prev => {
       if (prev.includes(productId)) {
         return prev.filter(id => id !== productId);
@@ -120,7 +121,11 @@ const WishlistPage = () => {
   };
 
   const handleSelectAll = () => {
-    const availableItemIds = availableItems.map(item => item.product._id);
+    // CORRECCIÓN: Acceso seguro al ID independientemente de la estructura
+    const availableItemIds = availableItems
+      .map(item => (item.product?._id || item._id || item.id))
+      .filter(Boolean); // Elimina nulls/undefined
+    
     setSelectedItems(availableItemIds);
   };
 
@@ -128,7 +133,10 @@ const WishlistPage = () => {
     setSelectedItems([]);
   };
 
-  // Estados de carga
+  // ============================================================================
+  // LOADING STATE
+  // ============================================================================
+
   if (loading && !items) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -144,6 +152,10 @@ const WishlistPage = () => {
       </div>
     );
   }
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -290,7 +302,7 @@ const WishlistPage = () => {
                   ? 'Explora nuestros productos y guarda tus favoritos aquí'
                   : 'Intenta cambiar el filtro para ver otros productos',
                 actionText: filter === 'all' ? 'Explorar productos' : 'Ver todos',
-                onAction: filter === 'all' ? () => navigate('/productos') : () => setFilter('all')
+                onAction: filter === 'all' ? () => navigate('/products') : () => setFilter('all')
               }}
             />
           </>
@@ -304,39 +316,71 @@ const WishlistPage = () => {
               title: 'Tu lista de deseos está vacía',
               message: 'Explora nuestros productos y guarda tus favoritos aquí',
               actionText: 'Explorar productos',
-              onAction: () => navigate('/productos'),
+              onAction: () => navigate('/products'),
               icon: 'heart'
             }}
           />
         )}
 
-        {/* Modal de confirmación para vaciar */}
+        {/* ✅ MODAL DE CONFIRMACIÓN CORREGIDO */}
         {showClearConfirm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-2">
-                ¿Vaciar lista de deseos?
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Esta acción eliminará todos los productos de tu lista. Esta acción no se puede deshacer.
-              </p>
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowClearConfirm(false)}
-                  className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleClearWishlist}
-                  disabled={actionLoading}
-                  className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:bg-red-300 transition-colors"
-                >
-                  {actionLoading ? 'Vaciando...' : 'Sí, vaciar lista'}
-                </button>
+          <>
+            {/* OVERLAY - Cierra al hacer click afuera */}
+            <div 
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+              onClick={() => setShowClearConfirm(false)}
+            />
+            
+            {/* MODAL */}
+            <div className="fixed inset-0 flex items-center justify-center p-4 z-50 pointer-events-none">
+              <div 
+                className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl pointer-events-auto animate-in fade-in zoom-in duration-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Icono de advertencia */}
+                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                  <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-900 mb-2 text-center">
+                  ¿Vaciar lista de deseos?
+                </h3>
+                <p className="text-gray-600 mb-6 text-center">
+                  Esta acción eliminará todos los productos de tu lista. 
+                  <strong className="block mt-2 text-red-600">Esta acción no se puede deshacer.</strong>
+                </p>
+                
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    disabled={actionLoading}
+                    className="flex-1 px-4 py-3 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await handleClearWishlist();
+                      } catch (err) {
+                        console.error('Error clearing wishlist:', err);
+                        // El error ya se maneja en handleClearWishlist
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="flex-1 px-4 py-3 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  >
+                    {actionLoading && (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {actionLoading ? 'Vaciando...' : 'Sí, vaciar lista'}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>
@@ -344,3 +388,10 @@ const WishlistPage = () => {
 };
 
 export default WishlistPage;
+
+
+
+
+
+
+// ok

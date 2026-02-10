@@ -1,23 +1,21 @@
-import React from 'react';
-import WishlistItem from './WishlistItem';
-import WishlistEmptyState from './WishlistEmptyState';
+// wishlist/components/WishlistGrid.jsx
+
+import React from "react";
+import WishlistItem from "./WishlistItem";
+import WishlistEmptyState from "./WishlistEmptyState";
 
 /**
  * @component WishlistGrid
  * @description Grid de items de wishlist
- * 
- * @param {Array} items - Array de items
- * @param {Function} onRemoveItem - Callback para eliminar
- * @param {Function} onMoveToCart - Callback para mover a carrito
- * @param {boolean} loading - Estado de carga
- * @param {Object} emptyState - Configuración de estado vacío
+ *
+ * 🆕 CORREGIDO: Key único agregado
  */
 const WishlistGrid = ({
   items = [],
   onRemoveItem,
   onMoveToCart,
   loading = false,
-  emptyState
+  emptyState,
 }) => {
   // Si no hay items, mostrar estado vacío
   if (!items || items.length === 0) {
@@ -26,15 +24,25 @@ const WishlistGrid = ({
 
   return (
     <div className="space-y-4">
-      {items.map((item) => (
-        <WishlistItem
-          key={item.product?._id || item._id}
-          item={item}
-          onRemove={onRemoveItem}
-          onMoveToCart={onMoveToCart}
-          loading={loading}
-        />
-      ))}
+      {items.map((item, index) => {
+        // 🆕 GENERAR KEY ÚNICO
+        const productId =
+          item.product?._id ||
+          item.product?.id ||
+          item.productId ||
+          `item-${index}`;
+        const key = `wishlist-item-${productId}`;
+
+        return (
+          <WishlistItem
+            key={key}
+            item={item}
+            onRemove={onRemoveItem}
+            onMoveToCart={onMoveToCart}
+            loading={loading}
+          />
+        );
+      })}
     </div>
   );
 };

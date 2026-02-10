@@ -1,15 +1,17 @@
+// wishlist/utils/wishlistHelpers.js
+
 /**
  * @module WishlistHelpers
  * @description Funciones utilitarias para Wishlist
  * 
- * Alineado con lógica del backend wishlist.service.js
+ * 🆕 MEJORADO:
+ * - Validación de nullish
+ * - canMoveToCart corregido (usa isPublished)
+ * - isProductInWishlist maneja productos sin popular
  */
 
 /**
  * Verifica si la wishlist está vacía
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {boolean}
  */
 export const isWishlistEmpty = (wishlist) => {
   return !wishlist || !wishlist.items || wishlist.items.length === 0;
@@ -17,49 +19,44 @@ export const isWishlistEmpty = (wishlist) => {
 
 /**
  * Obtiene el count de items
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {number}
  */
 export const getItemCount = (wishlist) => {
   return wishlist?.itemCount || wishlist?.items?.length || 0;
 };
 
 /**
- * Verifica si un producto está en la wishlist
- * 
- * @param {Object} wishlist - Wishlist object
- * @param {string} productId - ID del producto
- * @returns {boolean}
+ * 🆕 MEJORADO: Verifica si un producto está en la wishlist
+ * Maneja caso de producto sin popular (solo ID)
  */
 export const isProductInWishlist = (wishlist, productId) => {
-  if (!wishlist || !wishlist.items) return false;
+  if (!wishlist || !wishlist.items || !productId) return false;
   
-  return wishlist.items.some(
-    item => item.product?._id === productId || item.product === productId
-  );
+  return wishlist.items.some(item => {
+    // Si product es un objeto poblado
+    if (typeof item.product === 'object' && item.product !== null) {
+      return item.product._id === productId || item.product.id === productId;
+    }
+    // Si product es solo un string (ID sin popular)
+    return item.product === productId;
+  });
 };
 
 /**
  * Encuentra un item por productId
- * 
- * @param {Object} wishlist - Wishlist object
- * @param {string} productId - ID del producto
- * @returns {Object|null}
  */
 export const findWishlistItem = (wishlist, productId) => {
-  if (!wishlist || !wishlist.items) return null;
+  if (!wishlist || !wishlist.items || !productId) return null;
   
-  return wishlist.items.find(
-    item => item.product?._id === productId || item.product === productId
-  ) || null;
+  return wishlist.items.find(item => {
+    if (typeof item.product === 'object' && item.product !== null) {
+      return item.product._id === productId || item.product.id === productId;
+    }
+    return item.product === productId;
+  }) || null;
 };
 
 /**
  * Filtra items disponibles (en stock y publicados)
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {Array}
  */
 export const getAvailableItems = (wishlist) => {
   if (!wishlist || !wishlist.items) return [];
@@ -69,9 +66,6 @@ export const getAvailableItems = (wishlist) => {
 
 /**
  * Filtra items no disponibles
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {Array}
  */
 export const getUnavailableItems = (wishlist) => {
   if (!wishlist || !wishlist.items) return [];
@@ -81,9 +75,6 @@ export const getUnavailableItems = (wishlist) => {
 
 /**
  * Obtiene items con cambio de precio
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {Array}
  */
 export const getItemsWithPriceChange = (wishlist) => {
   if (!wishlist || !wishlist.items) return [];
@@ -93,9 +84,6 @@ export const getItemsWithPriceChange = (wishlist) => {
 
 /**
  * Obtiene items con precio reducido
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {Array}
  */
 export const getItemsWithPriceDrop = (wishlist) => {
   if (!wishlist || !wishlist.items) return [];
@@ -105,12 +93,11 @@ export const getItemsWithPriceDrop = (wishlist) => {
 
 /**
  * Formatea el cambio de precio
- * 
- * @param {Object} item - Wishlist item
- * @returns {string}
  */
 export const formatPriceChange = (item) => {
-  if (!item.priceChanged || !item.priceDifference) return '';
+  if (!item || !item.priceChanged || typeof item.priceDifference !== 'number') {
+    return '';
+  }
   
   const sign = item.priceDifference > 0 ? '+' : '';
   return `${sign}$${Math.abs(item.priceDifference).toFixed(2)}`;
@@ -118,12 +105,9 @@ export const formatPriceChange = (item) => {
 
 /**
  * Formatea el porcentaje de cambio de precio
- * 
- * @param {Object} item - Wishlist item
- * @returns {string}
  */
 export const formatPriceChangePercentage = (item) => {
-  if (!item.priceChanged || !item.priceWhenAdded || !item.product?.price) {
+  if (!item || !item.priceChanged || !item.priceWhenAdded || !item.product?.price) {
     return '';
   }
   
@@ -137,33 +121,26 @@ export const formatPriceChangePercentage = (item) => {
 
 /**
  * Formatea precio con moneda
- * 
- * @param {number} amount - Monto
- * @param {string} currency - Código de moneda
- * @returns {string}
  */
 export const formatPrice = (amount, currency = 'USD') => {
-  if (typeof amount !== 'number') return '$0.00';
+  const num = Number(amount) || 0;
   
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(amount);
+  }).format(num);
 };
 
 /**
  * Calcula el total de ahorros por cambios de precio
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {number}
  */
 export const calculateTotalSavings = (wishlist) => {
   if (!wishlist || !wishlist.items) return 0;
   
   return wishlist.items.reduce((total, item) => {
-    if (item.priceDropped && item.priceDifference < 0) {
+    if (item.priceDropped && typeof item.priceDifference === 'number' && item.priceDifference < 0) {
       return total + Math.abs(item.priceDifference);
     }
     return total;
@@ -172,9 +149,6 @@ export const calculateTotalSavings = (wishlist) => {
 
 /**
  * Ordena items por fecha agregada (más reciente primero)
- * 
- * @param {Array} items - Array de items
- * @returns {Array}
  */
 export const sortByDateAdded = (items) => {
   if (!items || !Array.isArray(items)) return [];
@@ -186,28 +160,22 @@ export const sortByDateAdded = (items) => {
 
 /**
  * Ordena items por cambio de precio (mayor descuento primero)
- * 
- * @param {Array} items - Array de items
- * @returns {Array}
  */
 export const sortByPriceDrop = (items) => {
   if (!items || !Array.isArray(items)) return [];
   
   return [...items].sort((a, b) => {
-    const diffA = a.priceDifference || 0;
-    const diffB = b.priceDifference || 0;
-    return diffA - diffB; // Menor primero (más negativo = mayor descuento)
+    const diffA = Number(a.priceDifference) || 0;
+    const diffB = Number(b.priceDifference) || 0;
+    return diffA - diffB;
   });
 };
 
 /**
  * Genera mensaje de notificación para cambio de precio
- * 
- * @param {Object} item - Wishlist item
- * @returns {string}
  */
 export const getPriceChangeMessage = (item) => {
-  if (!item.priceChanged) return '';
+  if (!item || !item.priceChanged) return '';
   
   if (item.priceDropped) {
     return `¡Precio reducido! Ahorra ${formatPriceChange(item)}`;
@@ -218,9 +186,6 @@ export const getPriceChangeMessage = (item) => {
 
 /**
  * Genera resumen de la wishlist
- * 
- * @param {Object} wishlist - Wishlist object
- * @returns {Object} Summary object
  */
 export const generateWishlistSummary = (wishlist) => {
   const itemCount = getItemCount(wishlist);
@@ -243,9 +208,6 @@ export const generateWishlistSummary = (wishlist) => {
 
 /**
  * Formatea fecha de agregado
- * 
- * @param {string|Date} date - Fecha
- * @returns {string}
  */
 export const formatAddedDate = (date) => {
   if (!date) return '';
@@ -270,12 +232,9 @@ export const formatAddedDate = (date) => {
 
 /**
  * Obtiene clase CSS para badge de cambio de precio
- * 
- * @param {Object} item - Wishlist item
- * @returns {string}
  */
 export const getPriceChangeBadgeClass = (item) => {
-  if (!item.priceChanged) return '';
+  if (!item || !item.priceChanged) return '';
   
   if (item.priceDropped) {
     return 'bg-green-100 text-green-800 border-green-200';
@@ -285,12 +244,17 @@ export const getPriceChangeBadgeClass = (item) => {
 };
 
 /**
- * Valida si se puede mover item a carrito
- * 
- * @param {Object} item - Wishlist item
- * @returns {Object} { canMove: boolean, reason: string }
+ * 🆕 CORREGIDO: Valida si se puede mover item a carrito
+ * Usa isPublished en lugar de status
  */
 export const canMoveToCart = (item) => {
+  if (!item || !item.product) {
+    return {
+      canMove: false,
+      reason: 'Datos de producto inválidos'
+    };
+  }
+
   if (!item.isAvailable) {
     return {
       canMove: false,
@@ -298,21 +262,16 @@ export const canMoveToCart = (item) => {
     };
   }
   
-  if (item.product?.stock === 0) {
+  const stock = Number(item.product.stock) || 0;
+  if (stock === 0) {
     return {
       canMove: false,
       reason: 'Sin stock'
     };
   }
   
-  if (item.product?.status !== 'active') {
-    return {
-      canMove: false,
-      reason: 'Producto inactivo'
-    };
-  }
-  
-  if (!item.product?.isPublished) {
+  // 🆕 CORREGIDO: Usa isPublished en lugar de status
+  if (item.product.isPublished === false) {
     return {
       canMove: false,
       reason: 'Producto no publicado'

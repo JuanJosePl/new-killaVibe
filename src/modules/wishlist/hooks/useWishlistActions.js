@@ -1,3 +1,5 @@
+// wishlist/hooks/useWishlistActions.js
+
 import { useState, useCallback } from "react";
 import { useWishlistContext } from "../context/WishlistContext";
 import {
@@ -9,138 +11,140 @@ import {
 /**
  * @hook useWishlistActions
  * @description Hook para acciones de wishlist (UI + sistema)
+ * 
+ * 🆕 MEJORADO:
+ * - Loading state unificado
+ * - Error handling consistente con Cart
  */
 const useWishlistActions = (onSuccess, onError) => {
   const {
-    // UI actions
     addItem: contextAddItem,
     removeItem: contextRemoveItem,
     clearWishlistItems: contextClearWishlist,
     moveToCart: contextMoveToCart,
     checkProduct: contextCheckProduct,
     getPriceChanges: contextGetPriceChanges,
-
-    // 🔥 SYSTEM actions (guest → user)
     migrateGuestWishlistToUser,
     clearGuestWishlist,
+    loading: contextLoading,
+    error: contextError,
   } = useWishlistContext();
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [actionError, setActionError] = useState(null);
 
   const clearError = useCallback(() => {
-    setError(null);
+    setActionError(null);
   }, []);
 
-  /* =========================
-     UI ACTIONS
-  ========================= */
+  // ============================================================================
+  // HELPER: EJECUTAR ACCIÓN
+  // ============================================================================
+
+  const executeAction = useCallback(
+    async (action, successMessage) => {
+      try {
+        setActionError(null);
+        const result = await action();
+
+        if (onSuccess && successMessage) {
+          onSuccess(successMessage);
+        }
+
+        return result;
+      } catch (err) {
+        const errorMessage =
+          err.response?.data?.message ||
+          err.message ||
+          "Error al realizar la acción";
+
+        setActionError(errorMessage);
+
+        if (onError) {
+          onError(errorMessage, err);
+        }
+
+        throw err;
+      }
+    },
+    [onSuccess, onError]
+  );
+
+  // ============================================================================
+  // UI ACTIONS
+  // ============================================================================
 
   const addToWishlist = useCallback(
     async (itemData) => {
       try {
-        setLoading(true);
-        setError(null);
-
         const validatedData = await validateAddItem(itemData);
-        const result = await contextAddItem(validatedData);
-
-        onSuccess?.("Producto agregado a tu lista de deseos", result);
-        return result;
+        
+        return await executeAction(
+          () => contextAddItem(validatedData),
+          "Producto agregado a tu lista de deseos"
+        );
       } catch (err) {
-        let errorMsg = "Error al agregar producto";
-
         if (err.name === "ValidationError") {
-          errorMsg = getValidationErrors(err)[0] || errorMsg;
-        } else if (err.response?.data?.message) {
-          errorMsg = err.response.data.message;
+          const errorMsg = getValidationErrors(err)[0] || "Error de validación";
+          setActionError(errorMsg);
+          if (onError) {
+            onError(errorMsg, err);
+          }
         }
-
-        setError(errorMsg);
-        onError?.(errorMsg, err);
         throw err;
-      } finally {
-        setLoading(false);
       }
     },
-    [contextAddItem, onSuccess, onError]
+    [contextAddItem, executeAction, onError]
   );
 
   const removeFromWishlist = useCallback(
     async (productId) => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const result = await contextRemoveItem(productId);
-        onSuccess?.("Producto eliminado de tu lista de deseos", result);
-        return result;
-      } catch (err) {
-        const errorMsg =
-          err.response?.data?.message || "Error al eliminar producto";
-        setError(errorMsg);
-        onError?.(errorMsg, err);
-        throw err;
-      } finally {
-        setLoading(false);
-      }
+      return await executeAction(
+        () => contextRemoveItem(productId),
+        "Producto eliminado de tu lista de deseos"
+      );
     },
-    [contextRemoveItem, onSuccess, onError]
+    [contextRemoveItem, executeAction]
   );
 
   const clearWishlist = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const result = await contextClearWishlist();
-      onSuccess?.("Lista de deseos vaciada", result);
-      return result;
-    } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || "Error al vaciar wishlist";
-      setError(errorMsg);
-      onError?.(errorMsg, err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [contextClearWishlist, onSuccess, onError]);
+    return await executeAction(
+      () => contextClearWishlist(),
+      "Lista de deseos vaciada"
+    );
+  }, [contextClearWishlist, executeAction]);
 
   const moveToCart = useCallback(
     async (productIds) => {
       try {
-        setLoading(true);
-        setError(null);
-
         await validateMoveToCart(productIds);
-        const result = await contextMoveToCart(productIds);
-
-        onSuccess?.(
-          `${result.movedCount} producto${
-            result.movedCount !== 1 ? "s" : ""
-          } movido${result.movedCount !== 1 ? "s" : ""} al carrito`,
-          result
+        
+        const result = await executeAction(
+          () => contextMoveToCart(productIds),
+          null // No message aquí, se setea después
         );
+
+        const count = result.movedCount || 0;
+        const msg = `${count} producto${count !== 1 ? "s" : ""} movido${
+          count !== 1 ? "s" : ""
+        } al carrito`;
+
+        if (onSuccess) {
+          onSuccess(msg);
+        }
 
         return result;
       } catch (err) {
-        let errorMsg = "Error al mover productos";
-
         if (err.name === "ValidationError") {
-          errorMsg = getValidationErrors(err)[0] || errorMsg;
-        } else if (err.response?.data?.message) {
-          errorMsg = err.response.data.message;
+          const errorMsg = getValidationErrors(err)[0] || "Error de validación";
+          setActionError(errorMsg);
+          if (onError) {
+            onError(errorMsg, err);
+          }
         }
-
-        setError(errorMsg);
-        onError?.(errorMsg, err);
         throw err;
-      } finally {
-        setLoading(false);
       }
     },
-    [contextMoveToCart, onSuccess, onError]
+    [contextMoveToCart, executeAction, onSuccess, onError]
   );
 
   const checkProduct = useCallback(
@@ -156,23 +160,21 @@ const useWishlistActions = (onSuccess, onError) => {
 
   const getPriceChanges = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
+      setActionError(null);
       return await contextGetPriceChanges();
     } catch (err) {
-      const errorMsg =
-        err.response?.data?.message || "Error al obtener cambios de precio";
-      setError(errorMsg);
-      onError?.(errorMsg, err);
+      const errorMsg = err.response?.data?.message || "Error al obtener cambios de precio";
+      setActionError(errorMsg);
+      if (onError) {
+        onError(errorMsg, err);
+      }
       throw err;
-    } finally {
-      setLoading(false);
     }
   }, [contextGetPriceChanges, onError]);
 
-  /* =========================
-     SYSTEM / SYNC ACTIONS
-  ========================= */
+  // ============================================================================
+  // RETURN
+  // ============================================================================
 
   return {
     // UI
@@ -187,9 +189,9 @@ const useWishlistActions = (onSuccess, onError) => {
     syncGuestWishlistToUser: migrateGuestWishlistToUser,
     clearGuestWishlist,
 
-    // State
-    loading,
-    error,
+    // State (unificado)
+    loading: contextLoading,
+    error: actionError || contextError,
     clearError,
   };
 };
