@@ -27,7 +27,8 @@ const BASE_URL = '/cart';
  * @throws {Error} 401 si no autenticado
  */
 export const getCart = async () => {
-  const { data } = await axiosInstance.get(BASE_URL);
+  // axiosInstance ya devuelve response.data, no el objeto completo
+  const data = await axiosInstance.get(BASE_URL);
   return data;
 };
 
@@ -51,7 +52,7 @@ export const getCart = async () => {
  * @throws {Error} 400 si stock insuficiente
  */
 export const addToCart = async (itemData) => {
-  const { data } = await axiosInstance.post(`${BASE_URL}/items`, itemData);
+  const data = await axiosInstance.post(`${BASE_URL}/items`, itemData);
   return data;
 };
 
@@ -75,7 +76,7 @@ export const addToCart = async (itemData) => {
  * @throws {Error} 404 si carrito no existe
  */
 export const updateCartItem = async (productId, updateData) => {
-  const { data } = await axiosInstance.put(`${BASE_URL}/items/${productId}`, updateData);
+  const data = await axiosInstance.put(`${BASE_URL}/items/${productId}`, updateData);
   return data;
 };
 
@@ -95,8 +96,8 @@ export const updateCartItem = async (productId, updateData) => {
  * @throws {Error} 404 si carrito no existe
  */
 export const removeFromCart = async (productId, attributes = {}) => {
-  const { data } = await axiosInstance.delete(`${BASE_URL}/items/${productId}`, {
-    data: { attributes }
+  const data = await axiosInstance.delete(`${BASE_URL}/items/${productId}`, {
+    data: { attributes },
   });
   return data;
 };
@@ -113,7 +114,7 @@ export const removeFromCart = async (productId, attributes = {}) => {
  * @throws {Error} 404 si carrito no existe
  */
 export const clearCart = async () => {
-  const { data } = await axiosInstance.delete(BASE_URL);
+  const data = await axiosInstance.delete(BASE_URL);
   return data;
 };
 
@@ -134,7 +135,7 @@ export const clearCart = async () => {
  * @throws {Error} 404 si carrito no existe
  */
 export const applyCoupon = async (code) => {
-  const { data } = await axiosInstance.post(`${BASE_URL}/coupon`, { code });
+  const data = await axiosInstance.post(`${BASE_URL}/coupon`, { code });
   return data;
 };
 
@@ -164,7 +165,7 @@ export const applyCoupon = async (code) => {
  * @throws {Error} 404 si carrito no existe
  */
 export const updateShippingAddress = async (addressData) => {
-  const { data } = await axiosInstance.put(`${BASE_URL}/shipping-address`, addressData);
+  const data = await axiosInstance.put(`${BASE_URL}/shipping-address`, addressData);
   return data;
 };
 
@@ -186,7 +187,7 @@ export const updateShippingAddress = async (addressData) => {
  * @throws {Error} 404 si carrito no existe
  */
 export const updateShippingMethod = async (shippingData) => {
-  const { data } = await axiosInstance.put(`${BASE_URL}/shipping-method`, shippingData);
+  const data = await axiosInstance.put(`${BASE_URL}/shipping-method`, shippingData);
   return data;
 };
 

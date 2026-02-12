@@ -59,22 +59,13 @@ const CartSummary = ({
 
         {/* Envío */}
         <div className="flex justify-between text-gray-700">
-          <span>Envío</span>
-          {hasShippingDiscount ? (
-            <div className="text-right">
-              <span className="line-through text-gray-400 text-sm mr-2">
-                {formatPrice(cart.shippingCost)}
-              </span>
-              <span className="font-medium text-green-600">
-                {formatPrice(summary.shipping)}
-              </span>
-            </div>
-          ) : summary.shipping === 0 ? (
-            <span className="font-medium text-green-600">GRATIS</span>
-          ) : (
-            <span className="font-medium">{formatPrice(summary.shipping)}</span>
-          )}
-        </div>
+  <span>Envío</span>
+  {summary.subtotal >= 150000 ? (
+    <span className="font-bold text-green-600">¡GRATIS!</span>
+  ) : (
+    <span className="font-medium">{formatPrice(summary.shipping)}</span>
+  )}
+</div>
 
         {/* Impuestos */}
         {summary.tax > 0 && (

@@ -1,5 +1,5 @@
 // src/shared/components/layout/Header.jsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Menu,
   X,
@@ -41,8 +41,14 @@ export default function Header() {
   // HOOKS GLOBALES
   // ============================================================================
 
-  // 🛒 CART (Usamos useCartContext para que el contador reaccione al instante)
-  const { itemCount: cartItemCount, loading: cartLoading } = useCartContext();
+   // ✅ HOOKS GLOBALES
+  const { cart, loading: cartLoading } = useCartContext();
+  
+  // ✅ CALCULAR ITEM COUNT REACTIVAMENTE
+  const cartItemCount = useMemo(() => {
+    if (!cart?.items) return 0;
+    return cart.items.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0);
+  }, [cart?.items]);
 
   // ❤️ WISHLIST
   const {

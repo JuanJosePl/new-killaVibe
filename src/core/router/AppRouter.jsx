@@ -67,6 +67,7 @@ const CookiesPage = lazy(() => import('../../app/cookies/Cookies'));
 const FAQPage = lazy(() => import('../../app/FAQ/FAQ'));
 const PrivacidadPage = lazy(() => import('../../app/privacidad/Privacidad'));
 const TerminosPage = lazy(() => import('../../app/terminos/Terminos'));
+const CheckoutPage = lazy(() => import('../../app/checkout/Checkout'));
 
 // Productos
 const ProductsListPage = lazy(() => import('../../modules/products/pages/ProductosLista'));
@@ -177,6 +178,9 @@ export default function AppRouter() {
 
           {/* Carrito */}
           <Route path="carrito" element={<CartPage />} />
+
+          {/* Checkout - NUEVA RUTA */}
+          <Route path="checkout" element={<CheckoutPage />} />
 
           {/* WishList */}
           <Route path="lista-deseos" element={<WishlistPage/>} />

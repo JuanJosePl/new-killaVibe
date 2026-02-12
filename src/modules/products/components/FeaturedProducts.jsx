@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useProductCart } from "../hooks/useProductCart";
 import { useProductWishlist } from "../hooks/useProductWishlist";
+import { productsAPI } from "../api/products.api";
 
 // Hook real de productos
 import { useProducts } from "../contexts/ProductsContext";
@@ -11,15 +12,52 @@ import { useProducts } from "../contexts/ProductsContext";
 import { ProductCard } from "./ProductCard";
 
 export function FeaturedProducts() {
-  // Usar el hook real con filtro de featured
-  const { products, loading, error } = useProducts({
-    featured: true,
-    limit: 8,
-    status: 'active',
-    visibility: 'public'
-  });
+  // ✅ CORRECCIÓN: Usar getFeaturedProducts() en lugar de getProducts()
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   const { quickAddToCart } = useProductCart();
   const { toggleProductWishlist, isProductInWishlist } = useProductWishlist();
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // ✅ USAR EL ENDPOINT CORRECTO
+        const response = await productsAPI.getFeaturedProducts(8);
+
+        if (!isMounted) return;
+
+        if (response.success && response.data) {
+          setFeaturedProducts(response.data);
+        } else if (response.count && response.data) {
+          setFeaturedProducts(response.data);
+        } else {
+          setFeaturedProducts([]);
+        }
+      } catch (err) {
+        if (isMounted && err.name !== 'AbortError') {
+          console.error('[FeaturedProducts] Error:', err);
+          setError(err.message || 'Error al cargar productos');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -56,7 +94,7 @@ export function FeaturedProducts() {
     );
   }
 
-  if (!products || products.length === 0) {
+  if (!featuredProducts || featuredProducts.length === 0) {
     return (
       <section className="py-16 lg:py-24 bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="container mx-auto px-4">
@@ -102,7 +140,7 @@ export function FeaturedProducts() {
 
         {/* Products Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {products.map((product, index) => (
+          {featuredProducts.map((product, index) => (
             <div
               key={product._id}
               className="animate-slide-in-up"

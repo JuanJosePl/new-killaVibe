@@ -2,16 +2,6 @@ import React from 'react';
 import WishlistItem from './WishlistItem';
 import WishlistEmptyState from './WishlistEmptyState';
 
-/**
- * @component WishlistGrid
- * @description Grid de items de wishlist
- * 
- * @param {Array} items - Array de items
- * @param {Function} onRemoveItem - Callback para eliminar
- * @param {Function} onMoveToCart - Callback para mover a carrito
- * @param {boolean} loading - Estado de carga
- * @param {Object} emptyState - Configuración de estado vacío
- */
 const WishlistGrid = ({
   items = [],
   onRemoveItem,
@@ -19,22 +9,27 @@ const WishlistGrid = ({
   loading = false,
   emptyState
 }) => {
-  // Si no hay items, mostrar estado vacío
   if (!items || items.length === 0) {
     return <WishlistEmptyState {...emptyState} />;
   }
 
   return (
-    <div className="space-y-4">
-      {items.map((item) => (
-        <WishlistItem
-          key={item.product?._id || item._id}
-          item={item}
-          onRemove={onRemoveItem}
-          onMoveToCart={onMoveToCart}
-          loading={loading}
-        />
-      ))}
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {items.map((item, index) => {
+        // Obtenemos el ID real para la key y las acciones
+        const productData = item?.product || item;
+        const safeId = productData?._id || productData?.id || item?.productId;
+
+        return (
+          <WishlistItem
+            key={safeId || `item-${index}`}
+            item={item}
+            onRemove={() => onRemoveItem(safeId)} // Pasamos el ID exacto
+            onMoveToCart={() => onMoveToCart(safeId)} // Pasamos el ID exacto
+            loading={loading}
+          />
+        );
+      })}
     </div>
   );
 };

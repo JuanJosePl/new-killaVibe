@@ -34,10 +34,10 @@ export const getItemCount = (wishlist) => {
  */
 export const isProductInWishlist = (wishlist, productId) => {
   if (!wishlist || !wishlist.items) return false;
-  
-  return wishlist.items.some(
-    item => item.product?._id === productId || item.product === productId
-  );
+  return wishlist.items.some(item => {
+    const id = item.product?._id || item.product?.id || item.productId || item._id || item.id;
+    return String(id) === String(productId);
+  });
 };
 
 /**
@@ -123,12 +123,14 @@ export const formatPriceChange = (item) => {
  * @returns {string}
  */
 export const formatPriceChangePercentage = (item) => {
-  if (!item.priceChanged || !item.priceWhenAdded || !item.product?.price) {
+  // 🔍 NORMALIZACIÓN: Buscar el producto en item.product o en item
+  const product = item.product || item; 
+  if (!item.priceChanged || !item.priceWhenAdded || !product?.price) {
     return '';
   }
   
   const percentage = (
-    (item.product.price - item.priceWhenAdded) / item.priceWhenAdded * 100
+    (product.price - item.priceWhenAdded) / item.priceWhenAdded * 100
   ).toFixed(1);
   
   const sign = percentage > 0 ? '+' : '';
@@ -143,14 +145,16 @@ export const formatPriceChangePercentage = (item) => {
  * @returns {string}
  */
 export const formatPrice = (amount, currency = 'USD') => {
-  if (typeof amount !== 'number') return '$0.00';
+  // CORRECCIÓN: Manejar strings que vienen del input o valores nulos
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numericAmount) || numericAmount === null) return '$0.00';
   
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
+    style: currency === 'USD' ? 'currency' : 'decimal',
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(amount);
+  }).format(numericAmount);
 };
 
 /**
@@ -291,38 +295,19 @@ export const getPriceChangeBadgeClass = (item) => {
  * @returns {Object} { canMove: boolean, reason: string }
  */
 export const canMoveToCart = (item) => {
-  if (!item.isAvailable) {
-    return {
-      canMove: false,
-      reason: 'Producto no disponible'
-    };
-  }
+  // 🔍 NORMALIZACIÓN
+  const product = item.product || item; 
   
-  if (item.product?.stock === 0) {
-    return {
-      canMove: false,
-      reason: 'Sin stock'
-    };
-  }
+  // Si no hay nombre, es un objeto corrupto o vacío
+  if (!product.name && !product.title) return { canMove: false, reason: 'Datos incompletos' };
+
+  // Priorizar el estado de disponibilidad del item, luego del producto
+  const available = item.isAvailable ?? product.isAvailable ?? (product.stock > 0);
+
+  if (!available) return { canMove: false, reason: 'No disponible' };
+  if (product.stock === 0) return { canMove: false, reason: 'Sin stock' };
   
-  if (item.product?.status !== 'active') {
-    return {
-      canMove: false,
-      reason: 'Producto inactivo'
-    };
-  }
-  
-  if (!item.product?.isPublished) {
-    return {
-      canMove: false,
-      reason: 'Producto no publicado'
-    };
-  }
-  
-  return {
-    canMove: true,
-    reason: ''
-  };
+  return { canMove: true, reason: '' };
 };
 
 export default {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShoppingCart,
   Heart,
@@ -14,7 +14,8 @@ import { Link } from "react-router-dom";
 
 // Hooks reales integrados
 import { useAuth } from "../../../core/hooks/useAuth";
-import { useCartContext } from "../../../modules/cart/context/CartContext"; // Conexión con el carrito
+import { useCartContext } from "../../../modules/cart/context/CartContext";
+import { useWishlistContext } from "../../../modules/wishlist/context/WishlistContext"; // ✅ AGREGADO
 
 // Utilidades reales
 import { formatPrice, calculateDiscountPercentage } from "../utils/priceHelpers";
@@ -28,21 +29,39 @@ import {
 /**
  * @component ProductCard
  * @description Componente de tarjeta de producto con efectos visuales avanzados y lógica de negocio.
+ * 
+ * ✅ FIXES APLICADOS:
+ * - Verificación correcta de productos en wishlist usando isInWishlist()
+ * - Estado local sincronizado con contexto global
+ * - Manejo correcto de agregar/quitar de wishlist
  */
 export function ProductCard({
   product,
   className = "",
   showWishlistButton = true,
-  variant = "default",
   onAddToCart,
   onToggleWishlist,
-  isInWishlist = false,
+  isInWishlist: isInWishlistProp, // ⚠️ DEPRECADO: Ahora usamos el contexto
 }) {
-  const { isAuthenticated } = useAuth();
-  const { addItem } = useCartContext(); // Acceso al contexto global de carrito
+  const { addItem } = useCartContext();
+  const { isInWishlist, addItem: addToWishlist, removeItem: removeFromWishlist } = useWishlistContext(); // ✅ NUEVO
+  
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isImageError, setIsImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+
+  // ✅ ESTADO LOCAL: Sincronizado con wishlist global
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  // ✅ SINCRONIZAR con wishlist cuando el producto o wishlist cambien
+  useEffect(() => {
+    const productId = product._id || product.id;
+    if (productId) {
+      const inWishlist = isInWishlist(productId);
+      setIsFavorite(inWishlist);
+    }
+  }, [product._id, product.id, isInWishlist]);
 
   // ============================================================================
   // HANDLERS
@@ -52,13 +71,15 @@ export function ProductCard({
     e.preventDefault();
     e.stopPropagation();
 
-    // 🛡️ Sincronización con el Contexto y el prop callback
+    if (!product || !product._id) {
+      console.error("Error: Intentando agregar un producto inválido", product);
+      return;
+    }
+
     if (available) {
-      // 1. Ejecutamos la acción del contexto global
-      addItem(product, 1, {}); 
-      
-      // 2. Si hay un callback adicional pasado por props, lo ejecutamos
-      if (onAddToCart) {
+      if (addItem) {
+        addItem(product, 1, {}); 
+      } else if (onAddToCart) {
         onAddToCart(product, 1, {}); 
       }
     }
@@ -67,14 +88,30 @@ export function ProductCard({
   const handleToggleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-
+    
     setIsWishlistLoading(true);
+
     try {
+      const productId = product._id || product.id;
+
+      if (isFavorite) {
+        // ✅ Quitar de wishlist
+        await removeFromWishlist(productId);
+        setIsFavorite(false);
+      } else {
+        // ✅ Agregar a wishlist (enviamos el producto completo)
+        await addToWishlist(product);
+        setIsFavorite(true);
+      }
+
+      // Callback opcional (si se pasa desde padre)
       if (onToggleWishlist) {
         await onToggleWishlist(product);
       }
     } catch (error) {
       console.error("Error toggling wishlist:", error);
+      // Revertir estado en caso de error
+      setIsFavorite(!isFavorite);
     } finally {
       setIsWishlistLoading(false);
     }
@@ -139,24 +176,19 @@ export function ProductCard({
             )}
           </div>
 
-          {/* Wishlist Button */}
+          {/* ✅ Wishlist Button - CORREGIDO */}
           {showWishlistButton && (
             <div className="absolute top-3 right-3 z-20">
               <button
                 onClick={handleToggleWishlist}
                 disabled={isWishlistLoading}
-                className={`h-10 w-10 rounded-full backdrop-blur-md border-0 shadow-lg transition-all duration-300 flex items-center justify-center ${
-                  isInWishlist
-                    ? "bg-red-500 text-white hover:bg-red-600 scale-110"
-                    : "bg-white/90 text-gray-700 hover:bg-white hover:scale-110 hover:shadow-xl"
-                }`}
-                title={isInWishlist ? "Quitar de favoritos" : "Agregar a favoritos"}
+                className={`h-10 w-10 rounded-full backdrop-blur-md shadow-lg transition-all duration-300 flex items-center justify-center ${
+                  isFavorite 
+                    ? "bg-red-500 text-white scale-110" 
+                    : "bg-white/90 text-gray-700 hover:scale-110 hover:bg-red-50"
+                } ${isWishlistLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <Heart
-                  className={`h-5 w-5 transition-transform duration-300 ${
-                    isInWishlist ? "fill-current scale-110" : ""
-                  } ${isHovered && !isInWishlist ? "scale-110" : ""}`}
-                />
+                <Heart className={`h-5 w-5 transition-all ${isFavorite ? "fill-current" : ""}`} />
               </button>
             </div>
           )}
@@ -170,12 +202,18 @@ export function ProductCard({
             )}
 
             <img
-              src={primaryImage}
+              src={isImageError ? getPrimaryImage({}) : primaryImage}
               alt={product.name}
               className={`h-full w-full object-cover transition-all duration-700 ${
                 isImageLoaded ? "opacity-100" : "opacity-0"
               } ${isHovered ? "scale-110 rotate-2" : "scale-100 rotate-0"}`}
               onLoad={() => setIsImageLoaded(true)}
+              onError={() => {
+                if (!isImageError) {
+                  setIsImageError(true);
+                  setIsImageLoaded(true);
+                }
+              }}
               loading="lazy"
             />
 

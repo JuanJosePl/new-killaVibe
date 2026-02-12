@@ -356,7 +356,7 @@ export function AuthProvider({ children }) {
   // ===================================================================
   // ✅ INICIALIZACIÓN: Cargar datos de localStorage al montar
   // ===================================================================
-  useEffect(() => {
+useEffect(() => {
   const initAuth = async () => {
     setLoading(true);
     

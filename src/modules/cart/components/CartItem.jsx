@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { formatPrice, formatAttributes, getStockMessage } from '../utils/cartHelpers';
+import { getPrimaryImage } from '../../products/utils/productHelpers';
 import { CART_LIMITS } from '../types/cart.types';
+import { productsAPI } from '../../products/api/products.api';
 
 /**
  * @component CartItem
@@ -23,37 +25,84 @@ const CartItem = ({
   const [quantity, setQuantity] = useState(item.quantity);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const product = item.product;
+  const product = item.product || {};
   const hasDiscount = item.discount > 0;
   const itemTotal = item.price * item.quantity;
   const isLowStock = product.stock > 0 && product.stock <= 5;
+
+  // Imagen calculada (puede venir del producto o de una petición extra)
+  const [imageUrl, setImageUrl] = useState(() => getPrimaryImage(product));
+
+  useEffect(() => {
+    let isMounted = true;
+
+    // Si ya tenemos una imagen clara (url o similar), no hace falta pedir más
+    const hasLocalImage =
+      (Array.isArray(product.images) && product.images.length > 0) ||
+      product.image ||
+      product.primaryImage ||
+      product.mainImage ||
+      product.mainImageUrl ||
+      product.thumbnail;
+
+    if (hasLocalImage) {
+      setImageUrl(getPrimaryImage(product));
+      return;
+    }
+
+    const fetchFullProduct = async () => {
+      try {
+        if (!product._id && !product.id && !product.slug) return;
+
+        let response;
+        if (product.slug) {
+          response = await productsAPI.getProductBySlug(product.slug);
+        } else {
+          const id = product._id || product.id;
+          response = await productsAPI.getProductById(id);
+        }
+
+        if (!isMounted || !response?.success || !response.data) return;
+
+        const fullProduct = response.data;
+        setImageUrl(getPrimaryImage(fullProduct));
+      } catch (error) {
+        console.error('[CartItem] Error cargando imagen completa del producto:', error);
+      }
+    };
+
+    fetchFullProduct();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [product._id, product.id, product.slug]);
 
   // ============================================================================
   // HANDLERS
   // ============================================================================
 
   const handleQuantityChange = async (newQuantity) => {
-    if (newQuantity < CART_LIMITS.MIN_QUANTITY || newQuantity > CART_LIMITS.MAX_QUANTITY) {
-      return;
-    }
+  // 1. Evitar que baje de 1 o suba del máximo global
+  if (newQuantity < 1 || newQuantity > CART_LIMITS.MAX_QUANTITY) return;
 
-    if (newQuantity > product.stock && product.trackQuantity) {
-      alert(`Solo hay ${product.stock} unidades disponibles`);
-      return;
-    }
+  // 2. Restricción estricta de stock disponible
+  if (newQuantity > product.stock) {
+    toast.error(`Solo hay ${product.stock} unidades disponibles`);
+    return;
+  }
 
-    setIsUpdating(true);
-    setQuantity(newQuantity);
-
-    try {
-      await onUpdateQuantity(product._id, newQuantity, item.attributes);
-    } catch (error) {
-      // Revertir cantidad en caso de error
-      setQuantity(item.quantity);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+  setIsUpdating(true);
+  try {
+    // Forzamos que la actualización sea el valor exacto, no un incremento relativo
+    await onUpdateQuantity(product._id, newQuantity, item.attributes);
+    setQuantity(newQuantity); 
+  } catch (error) {
+    setQuantity(item.quantity);
+  } finally {
+    setIsUpdating(false);
+  }
+};
 
   const handleIncrement = () => {
     handleQuantityChange(quantity + 1);
@@ -78,18 +127,22 @@ const CartItem = ({
   return (
     <div className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
       {/* Imagen del Producto */}
-      <div className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-md overflow-hidden">
-        {product.images?.[0]?.url ? (
-          <img
-            src={product.images[0].url}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
-            Sin imagen
-          </div>
-        )}
+      <div className="relative flex-shrink-0 w-24 h-24 bg-gray-100 rounded-md overflow-hidden">
+        <img
+          src={imageUrl}
+          alt={product.name}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            e.target.style.display = 'none';
+            const placeholder = e.target.nextElementSibling;
+            if (placeholder) placeholder.style.display = 'flex';
+          }}
+        />
+        <div
+          className="absolute inset-0 hidden items-center justify-center text-gray-400 text-xs bg-gray-100"
+        >
+          Sin imagen
+        </div>
       </div>
 
       {/* Información del Producto */}
@@ -174,8 +227,7 @@ const CartItem = ({
                 disabled || 
                 loading || 
                 isUpdating || 
-                quantity >= CART_LIMITS.MAX_QUANTITY ||
-                (product.trackQuantity && quantity >= product.stock)
+                quantity >= product.stock
               }
               className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Aumentar cantidad"

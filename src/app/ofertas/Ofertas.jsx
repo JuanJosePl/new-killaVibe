@@ -22,9 +22,17 @@ export default function OffersPage() {
   useEffect(() => {
     const fetchOfferProducts = async () => {
       try {
-        const response = await productsAPI.getFeaturedProducts;
-        if (response.success) {
+        // Obtener productos activos y públicos desde el backend
+        const response = await productsAPI.getProducts({
+          limit: 48,
+          status: "active",
+          visibility: "public",
+        });
+
+        if (response?.success && Array.isArray(response.data)) {
           setOfferProducts(response.data);
+        } else {
+          setOfferProducts([]);
         }
       } catch (error) {
         console.error("Error fetching offer products:", error);
@@ -79,28 +87,15 @@ export default function OffersPage() {
 
   return (
     <PageLayout>
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 pt-4 pb-8">
         {/* Header Mejorado */}
-        <div className="text-center mb-12">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-red-500 to-orange-500 rounded-full mb-6 relative">
-            <span className="text-4xl">🔥</span>
-            <div className="absolute -top-2 -right-2 bg-white text-red-500 text-xs px-2 py-1 rounded-full font-bold border-2 border-red-500">
-              HOT
-            </div>
-          </div>
-          <h1 className="text-3xl lg:text-4xl font-bold mb-4 bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
-            Ofertas Especiales
-          </h1>
-          <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-            Aprovecha nuestras mejores ofertas en productos tecnológicos. 
-            ¡Precios increíbles por tiempo limitado!
-          </p>
-        </div>
+
 
         {/* Countdown Timer */}
-        <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-6 mb-12 text-white text-center relative overflow-hidden">
+        <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-6 mb-6 text-white text-center relative overflow-hidden">
           <div className="absolute inset-0 bg-black/10"></div>
           <div className="relative z-10">
+            <span className="text-4xl">🔥</span>
             <h2 className="text-2xl font-bold mb-2">¡Ofertas por Tiempo Limitado!</h2>
             <p className="text-lg opacity-90 mb-4">Termina en:</p>
             <div className="flex justify-center space-x-4 text-2xl font-mono font-bold">
@@ -120,34 +115,11 @@ export default function OffersPage() {
           </div>
         </div>
 
-        {/* Special Offer Banner */}
-        <div className="bg-gradient-to-r from-primary to-purple-600 rounded-2xl p-8 mb-12 text-center text-white relative overflow-hidden">
-          <div className="absolute inset-0 bg-black/10"></div>
-          <div className="relative z-10">
-            <h2 className="text-2xl lg:text-3xl font-bold mb-2">
-              ¡Envío Gratis en Barranquilla y Soledad!
-            </h2>
-            <p className="text-lg opacity-90 mb-4">
-              En todas las compras. Sin mínimo de compra. ¡Siempre!
-            </p>
-            <div className="flex flex-wrap justify-center gap-4 mt-6">
-              <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                🚚 Envío Inmediato
-              </Badge>
-              <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                💳 Pagos Seguros
-              </Badge>
-              <Badge variant="secondary" className="bg-white/20 text-white border-0">
-                🛡️ Garantía
-              </Badge>
-            </div>
-          </div>
-        </div>
 
         {/* Products Section */}
         {discountProducts.length > 0 ? (
           <>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-4">
               <h3 className="text-2xl font-bold">
                 Productos en Oferta ({discountProducts.length})
               </h3>

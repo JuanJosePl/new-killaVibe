@@ -17,6 +17,8 @@ import {
  * - Helpers de UI
  */
 
+
+
 // ============================================================================
 // CÁLCULOS DE TOTALES
 // ============================================================================
@@ -26,6 +28,7 @@ import {
  * @param {Array} items - Items del carrito
  * @returns {number} Subtotal
  */
+
 export const calculateSubtotal = (items = []) => {
   return items.reduce((total, item) => {
     return total + (item.price * item.quantity);
@@ -67,7 +70,7 @@ export const calculateShippingDiscount = (shippingCost, coupon) => {
  * @param {number} taxRate - Tasa de impuesto (%)
  * @returns {number} Monto de impuestos
  */
-export const calculateTax = (amount, taxRate = 0) => {
+export const calculateTax = (amount, taxRate = 19) => {
   return (amount * taxRate) / 100;
 };
 
@@ -279,21 +282,28 @@ export const getShippingCost = (method) => {
 export const generateCartSummary = (cart) => {
   const subtotal = cart.subtotal || calculateSubtotal(cart.items);
   const discount = calculateCouponDiscount(subtotal, cart.coupon);
-  const shippingDiscount = calculateShippingDiscount(cart.shippingCost, cart.coupon);
-  const shipping = cart.shippingCost - shippingDiscount;
-  const tax = calculateTax(subtotal - discount + shipping, cart.taxRate);
-  const total = calculateTotal(cart);
+  
+  // Regla estricta de envío gratis
+  const FREE_SHIPPING_THRESHOLD = 150000;
+  const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
+  const shippingCostBase = cart.shippingCost || 15000; // Valor por defecto si no hay
+  const shipping = isFreeShipping ? 0 : shippingCostBase;
+  
+  // Impuesto sobre el subtotal (IVA 19%)
+  const tax = calculateTax(subtotal - discount, 19);
+  
+  // Total final
+  const total = (subtotal - discount) + shipping;
 
   return {
     subtotal,
     discount,
     shipping,
-    shippingDiscount,
     tax,
     total,
     itemCount: calculateItemCount(cart.items),
-    uniqueItems: calculateUniqueItems(cart.items),
-    savings: discount + shippingDiscount
+    savings: discount,
+    freeShippingRemaining: Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal)
   };
 };
 

@@ -36,8 +36,8 @@ const SYNC_COOLDOWN = 60 * 1000; // 1 minuto entre sincronizaciones
  */
 const hasGuestData = () => {
   try {
-    const cart = localStorage.getItem('killavibes_guest_cart');
-    const wishlist = localStorage.getItem('killavibes_guest_wishlist');
+    const cart = localStorage.getItem('killavibes_cart_guest');
+    const wishlist = localStorage.getItem('killavibes_wishlist_guest');
     
     const hasCart = cart && JSON.parse(cart).length > 0;
     const hasWishlist = wishlist && JSON.parse(wishlist).length > 0;
@@ -263,8 +263,8 @@ export const clearAllGuestData = () => {
  */
 export const getGuestDataStats = () => {
   try {
-    const cartData = localStorage.getItem('killavibes_guest_cart');
-    const wishlistData = localStorage.getItem('killavibes_guest_wishlist');
+    const cartData = localStorage.getItem('killavibes_cart_guest');
+    const wishlistData = localStorage.getItem('killavibes_wishlist_guest');
     
     const cartItems = cartData ? JSON.parse(cartData).length : 0;
     const wishlistItems = wishlistData ? JSON.parse(wishlistData).length : 0;

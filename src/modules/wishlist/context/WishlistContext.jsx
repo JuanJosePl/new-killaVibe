@@ -2,159 +2,245 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import * as wishlistAPI from '../api/wishlist.api';
 import { isWishlistEmpty, getItemCount } from '../utils/wishlistHelpers';
 
-/**
- * @context WishlistContext
- * @description Context global para Wishlist con caché en memoria
- * 
- * SINCRONIZADO con CartContext (misma arquitectura)
- */
-
 const WishlistContext = createContext(null);
 
-// Configuración de caché
 const WISHLIST_CACHE_CONFIG = {
-  TTL: 5 * 60 * 1000 // 5 minutos
+  TTL: 5 * 60 * 1000 
 };
 
-/**
- * @provider WishlistProvider
- * @description Provider global de Wishlist
- */
 export const WishlistProvider = ({ children }) => {
-  const [wishlist, setWishlist] = useState(null);
+  const [wishlist, setWishlist] = useState({ items: [], itemCount: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
+  const [cache, setCache] = useState({ data: null, timestamp: null });
 
-  // Caché en memoria (NO usar localStorage - no disponible en artifacts)
-  const [cache, setCache] = useState({
-    data: null,
-    timestamp: null
-  });
-
-  /**
-   * Verifica si el caché es válido
-   */
+  // --- Manejo de Caché ---
   const isCacheValid = useCallback(() => {
     if (!cache.data || !cache.timestamp) return false;
-    const now = Date.now();
-    return (now - cache.timestamp) < WISHLIST_CACHE_CONFIG.TTL;
+    return (Date.now() - cache.timestamp) < WISHLIST_CACHE_CONFIG.TTL;
   }, [cache]);
 
-  /**
-   * Actualiza el caché
-   */
   const updateCache = useCallback((data) => {
-    setCache({
-      data,
-      timestamp: Date.now()
-    });
+    setCache({ data, timestamp: Date.now() });
   }, []);
 
-  /**
-   * Limpia el caché
-   */
   const clearCache = useCallback(() => {
-    setCache({
-      data: null,
-      timestamp: null
-    });
+    setCache({ data: null, timestamp: null });
   }, []);
 
   /**
-   * Obtener wishlist (con caché)
+   * ✅ isInWishlist - Verificación robusta
+   */
+  const isInWishlist = useCallback((productId) => {
+    if (!wishlist?.items || !productId) return false;
+    
+    return wishlist.items.some(item => {
+      const idEnLista = item.product?._id || item.product?.id || item.productId || item._id || item.id;
+      return String(idEnLista) === String(productId);
+    });
+  }, [wishlist]);
+
+  /**
+   * ✅ fetchWishlist - Normalización garantizada
    */
   const fetchWishlist = useCallback(async (forceRefresh = false) => {
-  const auth = localStorage.getItem('killavibes_auth');
+    const auth = localStorage.getItem('killavibes_auth');
 
-  // MODO INVITADO: No llamar a la API
-  if (!auth) {
-    const saved = localStorage.getItem('killavibes_wishlist_guest');
-    const wishlistData = { items: saved ? JSON.parse(saved) : [] };
-    setWishlist(wishlistData);
-    setInitialized(true);
-    return wishlistData;
-  }
+    // MODO INVITADO
+    if (!auth) {
+      try {
+        const saved = localStorage.getItem('killavibes_wishlist_guest');
+        const items = saved ? JSON.parse(saved) : [];
+        
+        // ✅ Normalización forzada
+        const normalizedItems = items.map(item => {
+          const productData = item.product || item;
+          return {
+            _id: item._id || `temp-${Date.now()}-${Math.random()}`,
+            product: {
+              _id: productData._id || productData.id || item.productId,
+              id: productData._id || productData.id || item.productId,
+              name: productData.name || "Producto",
+              slug: productData.slug || (productData._id || productData.id),
+              price: productData.price || 0,
+              comparePrice: productData.comparePrice || productData.originalPrice || 0,
+              images: Array.isArray(productData.images) ? productData.images : (productData.image ? [productData.image] : []),
+              mainCategory: productData.mainCategory || productData.category || null,
+              stock: productData.stock ?? 0,
+              rating: productData.rating || null,
+              isFeatured: productData.isFeatured || productData.featured || false
+            },
+            addedAt: item.addedAt || new Date().toISOString()
+          };
+        });
 
-  try {
-    if (!forceRefresh && isCacheValid()) {
-      setWishlist(cache.data);
+        const data = { items: normalizedItems, itemCount: normalizedItems.length };
+        setWishlist(data);
+        setInitialized(true);
+        return data;
+      } catch (err) {
+        console.error('[WishlistContext] Error loading guest wishlist:', err);
+        setInitialized(true);
+        return { items: [], itemCount: 0 };
+      }
+    }
+
+    // MODO AUTENTICADO
+    try {
+      if (!forceRefresh && isCacheValid()) {
+        setWishlist(cache.data);
+        setInitialized(true);
+        return cache.data;
+      }
+      
+      setLoading(true);
+      const response = await wishlistAPI.getWishlist();
+      
+      // ✅ Normalizar también respuesta del backend (por si acaso)
+      const normalizedData = {
+        ...response.data,
+        items: (response.data.items || []).map(item => ({
+          ...item,
+          product: {
+            ...item.product,
+            id: item.product._id || item.product.id,
+            images: Array.isArray(item.product.images) ? item.product.images : []
+          }
+        }))
+      };
+      
+      setWishlist(normalizedData);
+      updateCache(normalizedData);
+      return normalizedData;
+    } catch (err) {
+      console.error('[WishlistContext] Error fetching wishlist:', err);
+      setError(err.response?.data?.message || 'Error al cargar');
+      return { items: [], itemCount: 0 };
+    } finally {
+      setLoading(false);
       setInitialized(true);
-      return cache.data;
     }
-
-    setLoading(true);
-    setError(null);
-
-    const response = await wishlistAPI.getWishlist();
-    const wishlistData = response.data;
-
-    setWishlist(wishlistData);
-    updateCache(wishlistData);
-    setInitialized(true);
-    return wishlistData;
-  } catch (err) {
-    console.error('[WishlistContext] Error fetching wishlist:', err);
-    // No lanzamos throw para evitar el Uncaught in promise en el mount
-    setError(err.response?.data?.message || 'Error al cargar la wishlist');
-  } finally {
-    setLoading(false);
-  }
-}, [isCacheValid, cache.data, updateCache]);
-
-const addItem = useCallback(async (itemData) => {
-  const auth = localStorage.getItem('killavibes_auth');
-
-  // MODO INVITADO
-  if (!auth) {
-    const saved = localStorage.getItem('killavibes_wishlist_guest');
-    let currentItems = saved ? JSON.parse(saved) : [];
-    
-    if (!currentItems.find(i => i.productId === itemData.productId)) {
-      currentItems.push(itemData);
-      localStorage.setItem('killavibes_wishlist_guest', JSON.stringify(currentItems));
-      setWishlist({ items: currentItems });
-    }
-    return { success: true };
-  }
-
-  // MODO AUTENTICADO
-  try {
-    setLoading(true);
-    setError(null);
-    const response = await wishlistAPI.addItem(itemData);
-    const updatedWishlist = response.data;
-    setWishlist(updatedWishlist);
-    updateCache(updatedWishlist);
-    return updatedWishlist;
-  } catch (err) {
-    console.error('[WishlistContext] Error adding item:', err);
-    setError(err.response?.data?.message || 'Error al agregar producto');
-    throw err;
-  } finally {
-    setLoading(false);
-  }
-}, [updateCache]);
+  }, [isCacheValid, cache.data, updateCache]);
 
   /**
-   * Eliminar item de wishlist
+   * ✅ addItem - Guardar producto COMPLETO
+   */
+  const addItem = useCallback(async (incomingData) => {
+    const auth = localStorage.getItem('killavibes_auth');
+    
+    if (!incomingData) {
+      console.error('[WishlistContext] addItem: No se proporcionó producto');
+      return { success: false, message: 'Producto inválido' };
+    }
+
+    const pId = incomingData._id || incomingData.id || incomingData.productId;
+
+    if (!pId) {
+      console.error('[WishlistContext] addItem: Producto sin ID', incomingData);
+      return { success: false, message: 'Producto sin ID' };
+    }
+
+    if (!auth) {
+      // ✅ MODO INVITADO: Guardar producto COMPLETO
+      try {
+        const saved = localStorage.getItem('killavibes_wishlist_guest');
+        let currentItems = saved ? JSON.parse(saved) : [];
+        
+        const exists = currentItems.some(i => {
+          const id = i.productId || i.product?._id || i.product?.id || i._id;
+          return String(id) === String(pId);
+        });
+        
+        if (exists) {
+          return { success: false, message: 'Ya está en favoritos' };
+        }
+        
+        // ✅ ESTRUCTURA COMPLETA para localStorage
+        const newItem = {
+          _id: `temp-${Date.now()}-${Math.random()}`,
+          productId: pId,
+          product: {
+            _id: pId,
+            id: pId,
+            name: incomingData.name || "Producto",
+            slug: incomingData.slug || pId,
+            price: incomingData.price || 0,
+            comparePrice: incomingData.comparePrice || incomingData.originalPrice || 0,
+            images: Array.isArray(incomingData.images) ? incomingData.images : (incomingData.image ? [incomingData.image] : []),
+            mainCategory: incomingData.mainCategory || incomingData.category || null,
+            stock: incomingData.stock ?? 0,
+            rating: incomingData.rating || null,
+            isFeatured: incomingData.isFeatured || incomingData.featured || false
+          },
+          addedAt: new Date().toISOString()
+        };
+        
+        currentItems.push(newItem);
+        localStorage.setItem('killavibes_wishlist_guest', JSON.stringify(currentItems));
+        setWishlist({ items: currentItems, itemCount: currentItems.length });
+        
+        return { success: true, message: 'Agregado a favoritos' };
+      } catch (err) {
+        console.error('[WishlistContext] Error adding to guest wishlist:', err);
+        throw err;
+      }
+    }
+
+    // MODO API
+    try {
+      setLoading(true);
+      const response = await wishlistAPI.addItem({ productId: pId });
+      
+      // Normalizar respuesta
+      const normalizedData = {
+        ...response.data,
+        items: (response.data.items || []).map(item => ({
+          ...item,
+          product: {
+            ...item.product,
+            id: item.product._id || item.product.id
+          }
+        }))
+      };
+      
+      setWishlist(normalizedData);
+      updateCache(normalizedData);
+      return { success: true, ...response };
+    } catch (err) {
+      console.error('[WishlistContext] Error adding to API wishlist:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [updateCache]);
+
+  /**
+   * ✅ removeItem
    */
   const removeItem = useCallback(async (productId) => {
+    const auth = localStorage.getItem('killavibes_auth');
+
+    if (!auth) {
+      const saved = localStorage.getItem('killavibes_wishlist_guest');
+      let currentItems = saved ? JSON.parse(saved) : [];
+      const filtered = currentItems.filter(i => {
+        const id = i.productId || i.product?._id || i.product?.id || i._id;
+        return String(id) !== String(productId);
+      });
+      localStorage.setItem('killavibes_wishlist_guest', JSON.stringify(filtered));
+      setWishlist({ items: filtered, itemCount: filtered.length });
+      return { success: true };
+    }
+
     try {
       setLoading(true);
-      setError(null);
-
       const response = await wishlistAPI.removeItem(productId);
-      const updatedWishlist = response.data;
-
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
-
-      return updatedWishlist;
+      setWishlist(response.data);
+      updateCache(response.data);
+      return response.data;
     } catch (err) {
       console.error('[WishlistContext] Error removing item:', err);
-      const errorMsg = err.response?.data?.message || 'Error al eliminar producto';
-      setError(errorMsg);
       throw err;
     } finally {
       setLoading(false);
@@ -162,112 +248,57 @@ const addItem = useCallback(async (itemData) => {
   }, [updateCache]);
 
   /**
-   * Limpiar toda la wishlist
+   * Otros métodos (sin cambios)
    */
   const clearWishlistItems = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await wishlistAPI.clearWishlist();
-      const updatedWishlist = response.data;
-
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
-
-      return updatedWishlist;
-    } catch (err) {
-      console.error('[WishlistContext] Error clearing wishlist:', err);
-      const errorMsg = err.response?.data?.message || 'Error al vaciar wishlist';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
+    const auth = localStorage.getItem('killavibes_auth');
+    if (!auth) {
+      localStorage.removeItem('killavibes_wishlist_guest');
+      setWishlist({ items: [], itemCount: 0 });
+      return;
     }
+    try {
+      const response = await wishlistAPI.clearWishlist();
+      setWishlist(response.data);
+      updateCache(response.data);
+    } catch (err) { throw err; }
   }, [updateCache]);
 
-  /**
-   * Verificar si producto está en wishlist
-   */
+  const moveToCart = useCallback(async (productIds) => {
+    const response = await wishlistAPI.moveToCart(productIds);
+    await fetchWishlist(true);
+    return response.data;
+  }, [fetchWishlist]);
+
   const checkProduct = useCallback(async (productId) => {
     try {
       const response = await wishlistAPI.checkProduct(productId);
       return response.inWishlist;
-    } catch (err) {
-      console.error('[WishlistContext] Error checking product:', err);
-      return false;
-    }
+    } catch (err) { return false; }
   }, []);
 
-  /**
-   * Mover items a carrito
-   */
-  const moveToCart = useCallback(async (productIds) => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await wishlistAPI.moveToCart(productIds);
-
-      // Refrescar wishlist después de mover
-      await fetchWishlist(true);
-
-      return response.data;
-    } catch (err) {
-      console.error('[WishlistContext] Error moving to cart:', err);
-      const errorMsg = err.response?.data?.message || 'Error al mover productos';
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchWishlist]);
-
-  /**
-   * Obtener cambios de precio
-   */
   const getPriceChanges = useCallback(async () => {
-    try {
-      const response = await wishlistAPI.getPriceChanges();
-      return response.data;
-    } catch (err) {
-      console.error('[WishlistContext] Error getting price changes:', err);
-      throw err;
-    }
+    const response = await wishlistAPI.getPriceChanges();
+    return response.data;
   }, []);
 
-  /**
-   * Refrescar wishlist (force)
-   */
-  const refreshWishlist = useCallback(async () => {
-    return await fetchWishlist(true);
-  }, [fetchWishlist]);
+  const refreshWishlist = useCallback(() => fetchWishlist(true), [fetchWishlist]);
 
-  /**
-   * Cargar wishlist inicial
-   */
   useEffect(() => {
-    if (!initialized) {
-      fetchWishlist();
-    }
+    if (!initialized) fetchWishlist();
   }, [initialized, fetchWishlist]);
 
-  // Helpers computados
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = getItemCount(wishlist);
 
   const value = {
-    // Estado
     wishlist,
     loading,
     error,
     initialized,
-
-    // Helpers
     isEmpty,
     itemCount,
-
-    // Acciones
+    isInWishlist,
     fetchWishlist,
     addItem,
     removeItem,
@@ -276,31 +307,84 @@ const addItem = useCallback(async (itemData) => {
     moveToCart,
     getPriceChanges,
     refreshWishlist,
-
-    // Caché
     clearCache,
     setError
   };
 
-  return (
-    <WishlistContext.Provider value={value}>
-      {children}
-    </WishlistContext.Provider>
-  );
+  return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;
 };
 
-/**
- * @hook useWishlistContext
- * @description Hook para acceder al context
- */
 export const useWishlistContext = () => {
   const context = useContext(WishlistContext);
-  
-  if (!context) {
-    throw new Error('useWishlistContext debe usarse dentro de WishlistProvider');
-  }
-  
+  if (!context) throw new Error('useWishlistContext debe usarse dentro de WishlistProvider');
   return context;
 };
 
 export default WishlistContext;
+
+// ============================================================================
+// HELPERS ESTÁTICOS PARA syncManager (migración invitado → usuario)
+// ============================================================================
+
+/**
+ * Migra la wishlist guardada en localStorage (modo invitado)
+ * a la wishlist del usuario autenticado mediante la API.
+ *
+ * @returns {Promise<{success: boolean, migratedCount: number, failedCount: number}>}
+ */
+export const migrateGuestWishlistToUser = async () => {
+  try {
+    const raw = localStorage.getItem("killavibes_wishlist_guest");
+    const guestItems = raw ? JSON.parse(raw) : [];
+
+    if (!Array.isArray(guestItems) || guestItems.length === 0) {
+      return { success: true, migratedCount: 0, failedCount: 0 };
+    }
+
+    let migratedCount = 0;
+    let failedCount = 0;
+
+    for (const item of guestItems) {
+      try {
+        const product = item.product || item;
+        const productId =
+          item.productId ||
+          product?._id ||
+          product?.id ||
+          item._id ||
+          item.id;
+
+        if (!productId) {
+          failedCount += 1;
+          continue;
+        }
+
+        await wishlistAPI.addItem({ productId });
+        migratedCount += 1;
+      } catch (err) {
+        console.error("[WishlistContext] Error migrando item invitado:", err);
+        failedCount += 1;
+      }
+    }
+
+    // Limpiar wishlist de invitado tras migración
+    localStorage.removeItem("killavibes_wishlist_guest");
+
+    return { success: true, migratedCount, failedCount };
+  } catch (error) {
+    console.error("[WishlistContext] Error migrando wishlist invitado:", error);
+    return { success: false, migratedCount: 0, failedCount: 0 };
+  }
+};
+
+/**
+ * Limpia completamente la wishlist de invitado del localStorage.
+ * Usado por syncManager.clearAllGuestData.
+ */
+export const clearGuestWishlist = () => {
+  try {
+    localStorage.removeItem("killavibes_wishlist_guest");
+  } catch (error) {
+    console.error("[WishlistContext] Error limpiando wishlist invitado:", error);
+  }
+};
