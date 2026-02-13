@@ -1,6 +1,6 @@
 import { useRelatedProducts } from "../hooks/useProductDetails";
 import { ProductCard } from "./ProductCard";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight  } from "lucide-react";
 import { useRef, useState } from "react";
 
 /**

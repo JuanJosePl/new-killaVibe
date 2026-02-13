@@ -13,7 +13,8 @@ import {
   Sparkles,
   AlertCircle,
   Check,
-  Zap
+  Zap,
+  ShoppingCart
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
