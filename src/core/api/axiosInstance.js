@@ -151,7 +151,9 @@ axiosInstance.interceptors.response.use(
     }
 
     // ✅ REEMPLAZO PUNTUAL: Creamos una instancia de Error legítima
-    const errorToReturn = new Error(error.response?.data?.message || error.message || 'Error desconocido');
+    const errorToReturn = new Error(
+      error.response?.data?.message || error.message || 'Error desconocido'
+    );
     
     // Agregamos metadata útil para los componentes
     errorToReturn.statusCode = error.response?.status || 500;

@@ -20,7 +20,7 @@ import {
   calculateItemCount,
   normalizeCartStructure,
   calculateLocalCartTotals,
-  isProductInCart,
+  isProductInCart as isProductInCartHelper,
   findCartItem,
   generateCartItemKey,
 } from "../utils/cartHelpers";
@@ -66,7 +66,6 @@ export const CartProvider = ({ children }) => {
 
   /**
    * Guarda el carrito guest en localStorage.
-   * Guarda el objeto completo (con items + totales).
    */
   const saveGuestCart = useCallback((cartData) => {
     try {
@@ -80,10 +79,7 @@ export const CartProvider = ({ children }) => {
   }, []);
 
   /**
-   * ✅ INTEGRADO: carga el carrito guest con compatibilidad hacia atrás.
-   * El funcional guardaba solo el array de items (JSON.stringify(updatedCart.items)).
-   * La versión actual guarda el objeto completo.
-   * Esta función maneja ambos formatos para no romper datos existentes.
+   * Carga el carrito guest con compatibilidad hacia atrás.
    */
   const loadGuestCart = useCallback(() => {
     try {
@@ -92,7 +88,7 @@ export const CartProvider = ({ children }) => {
 
       const parsed = JSON.parse(saved);
 
-      // Formato nuevo: objeto con .items (versión actual)
+      // Formato nuevo: objeto con .items
       if (
         parsed &&
         typeof parsed === "object" &&
@@ -102,8 +98,7 @@ export const CartProvider = ({ children }) => {
         return parsed;
       }
 
-      // ✅ Formato legado: array plano de items (versión funcional anterior)
-      // Se recalculan los totales con calculateLocalCartTotals para compatibilidad
+      // Formato legado: array plano de items
       if (Array.isArray(parsed)) {
         console.log(
           "[CartContext] Formato legacy detectado, recalculando totales..."
@@ -123,11 +118,6 @@ export const CartProvider = ({ children }) => {
   // OPERACIONES GUEST MODE
   // ============================================================================
 
-  /**
-   * ✅ INTEGRADO: addItemGuest usa calculateLocalCartTotals (lógica COP)
-   * en lugar de normalizeCartStructure (lógica USD), alineado con el funcional.
-   * Mantiene la estructura completa del item como en el proyecto actual.
-   */
   const addItemGuest = useCallback(
     (productData, quantity = 1) => {
       const currentCart = loadGuestCart();
@@ -165,7 +155,6 @@ export const CartProvider = ({ children }) => {
             `Cantidad máxima permitida: ${CART_LIMITS.MAX_QUANTITY}`
           );
         }
-        // ✅ Validación de stock real si trackQuantity está activo
         if (productData.trackQuantity && newQty > availableStock) {
           throw new Error(`Solo hay ${availableStock} unidades disponibles`);
         }
@@ -179,8 +168,6 @@ export const CartProvider = ({ children }) => {
           throw new Error(`Solo hay ${availableStock} unidades disponibles`);
         }
 
-        // ✅ INTEGRADO: estructura del item alineada con el funcional
-        // Incluye options (funcional) y attributes (actual) para compatibilidad
         newItems.push({
           product: {
             _id: productId,
@@ -206,7 +193,6 @@ export const CartProvider = ({ children }) => {
         });
       }
 
-      // ✅ INTEGRADO: usar calculateLocalCartTotals (lógica COP) como el funcional
       const updatedCart = calculateLocalCartTotals(newItems);
 
       saveGuestCart(updatedCart);
@@ -246,7 +232,6 @@ export const CartProvider = ({ children }) => {
 
       newItems[index] = { ...newItems[index], quantity: qty };
 
-      // ✅ INTEGRADO: usar calculateLocalCartTotals (lógica COP)
       const updatedCart = calculateLocalCartTotals(newItems);
 
       saveGuestCart(updatedCart);
@@ -266,7 +251,6 @@ export const CartProvider = ({ children }) => {
         return String(itemProductId) !== String(productId);
       });
 
-      // ✅ INTEGRADO: usar calculateLocalCartTotals (lógica COP)
       const updatedCart = calculateLocalCartTotals(newItems);
 
       saveGuestCart(updatedCart);
@@ -343,13 +327,6 @@ export const CartProvider = ({ children }) => {
     [isCacheValid, cache.data, updateCache, loadGuestCart]
   );
 
-  /**
-   * ✅ INTEGRADO: addItem recibe productData completo.
-   * En modo guest usa addItemGuest (que usa calculateLocalCartTotals).
-   * En modo autenticado extrae productId para la API.
-   * Compatible con la firma extendida (productData, quantity, options)
-   * del funcional sin romper la firma actual (productData, quantity).
-   */
   const addItem = useCallback(
     async (productData, quantity = 1, options = {}) => {
       if (!productData) {
@@ -364,7 +341,6 @@ export const CartProvider = ({ children }) => {
       if (!auth) {
         setLoading(true);
         try {
-          // ✅ Pasar options como attributes si viene del funcional
           const productWithOptions =
             options && Object.keys(options).length > 0
               ? { ...productData, attributes: options }
@@ -655,6 +631,40 @@ export const CartProvider = ({ children }) => {
   }, []);
 
   // ============================================================================
+  // ✅ FUNCIONES DE VERIFICACIÓN (NUEVAS)
+  // ============================================================================
+
+  /**
+   * Verifica si un producto está en el carrito
+   * @param {string} productId - ID del producto
+   * @param {Object} attributes - Atributos del producto (opcional)
+   * @returns {boolean}
+   */
+  const isProductInCart = useCallback(
+    (productId, attributes = {}) => {
+      if (!productId || !cart?.items) return false;
+      return isProductInCartHelper(cart.items, productId, attributes);
+    },
+    [cart]
+  );
+
+  /**
+   * Obtiene la cantidad de un producto en el carrito
+   * @param {string} productId - ID del producto
+   * @param {Object} attributes - Atributos del producto (opcional)
+   * @returns {number}
+   */
+  const getProductQuantity = useCallback(
+    (productId, attributes = {}) => {
+      if (!productId || !cart?.items) return 0;
+      
+      const item = findCartItem(cart.items, productId, attributes);
+      return item ? Number(item.quantity) || 0 : 0;
+    },
+    [cart]
+  );
+
+  // ============================================================================
   // HELPERS DE VISTA
   // ============================================================================
 
@@ -685,10 +695,10 @@ export const CartProvider = ({ children }) => {
     loading,
     error,
     initialized,
+    
+    itemCount: calculateItemCount(cart.items),
 
-    // ✅ itemCount expuesto directamente (presente en el funcional)
-    itemCount: calculateItemCount(cart.items || []),
-
+    // CRUD
     fetchCart,
     addItem,
     updateItem,
@@ -697,12 +707,19 @@ export const CartProvider = ({ children }) => {
     applyCoupon,
     updateShippingAddress,
     updateShippingMethod,
+    
+    // Helpers
     refreshCart,
     getItemCount,
     isEmpty,
     clearCache,
     setError: (err) => setError(err),
 
+    // ✅ FUNCIONES DE VERIFICACIÓN
+    isProductInCart,
+    getProductQuantity,
+
+    // Migración
     migrateGuestCartToUser,
     clearGuestCart,
   };

@@ -14,9 +14,17 @@ import {
  * @description Funciones utilidad para el módulo Cart
  */
 
+
+
 // ============================================================================
 // CÁLCULOS DE TOTALES
 // ============================================================================
+
+/**
+ * Calcula subtotal del carrito
+ * @param {Array} items - Items del carrito
+ * @returns {number} Subtotal
+ */
 
 export const calculateSubtotal = (items = []) => {
   if (!Array.isArray(items)) return 0;
@@ -50,10 +58,14 @@ export const calculateShippingDiscount = (shippingCost, coupon) => {
   return Math.min(discountNum, shippingNum);
 };
 
-export const calculateTax = (amount, taxRate = DEFAULT_TAX_RATE) => {
-  const amountNum = Number(amount) || 0;
-  const rateNum = Number(taxRate) || 0;
-  return (amountNum * rateNum) / 100;
+/**
+ * Calcula impuestos
+ * @param {number} amount - Monto base
+ * @param {number} taxRate - Tasa de impuesto (%)
+ * @returns {number} Monto de impuestos
+ */
+export const calculateTax = (amount, taxRate = 19) => {
+  return (amount * taxRate) / 100;
 };
 
 export const calculateTotal = (cart) => {
@@ -271,54 +283,30 @@ export const getShippingCost = (method) => {
  * Mantiene todos los campos del contrato original.
  */
 export const generateCartSummary = (cart) => {
-  if (!cart) {
-    return {
-      subtotal: 0,
-      discount: 0,
-      shipping: 0,
-      shippingDiscount: 0,
-      tax: 0,
-      total: 0,
-      itemCount: 0,
-      uniqueItems: 0,
-      savings: 0,
-      freeShippingRemaining: CART_THRESHOLDS.MIN_FREE_SHIPPING,
-    };
-  }
-
-  const subtotal = Number(cart.subtotal) || calculateSubtotal(cart.items);
-  const discount =
-    Number(cart.discount) || calculateCouponDiscount(subtotal, cart.coupon);
-  const shippingCostBase = Number(cart.shippingCost) || DEFAULT_SHIPPING_COST;
-  // ✅ Lógica real del proyecto: envío gratis a partir de MIN_FREE_SHIPPING
-  const isFreeShipping = subtotal >= CART_THRESHOLDS.MIN_FREE_SHIPPING;
-  const shippingDiscount = calculateShippingDiscount(
-    shippingCostBase,
-    cart.coupon
-  );
-  const shipping = isFreeShipping
-    ? 0
-    : Math.max(0, shippingCostBase - shippingDiscount);
-
-  const tax =
-    Number(cart.tax) ||
-    calculateTax(subtotal - discount + shipping, cart.taxRate);
-  const total = subtotal - discount + shipping;
+  const subtotal = cart.subtotal || calculateSubtotal(cart.items);
+  const discount = calculateCouponDiscount(subtotal, cart.coupon);
+  
+  // Regla estricta de envío gratis
+  const FREE_SHIPPING_THRESHOLD = 150000;
+  const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
+  const shippingCostBase = cart.shippingCost || 15000; // Valor por defecto si no hay
+  const shipping = isFreeShipping ? 0 : shippingCostBase;
+  
+  // Impuesto sobre el subtotal (IVA 19%)
+  const tax = calculateTax(subtotal - discount, 19);
+  
+  // Total final
+  const total = (subtotal - discount) + shipping;
 
   return {
     subtotal,
     discount,
     shipping,
-    shippingDiscount,
     tax,
     total,
     itemCount: calculateItemCount(cart.items),
-    uniqueItems: calculateUniqueItems(cart.items),
-    savings: discount + shippingDiscount,
-    freeShippingRemaining: Math.max(
-      0,
-      CART_THRESHOLDS.MIN_FREE_SHIPPING - subtotal
-    ),
+    savings: discount,
+    freeShippingRemaining: Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal)
   };
 };
 

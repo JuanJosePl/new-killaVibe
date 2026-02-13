@@ -12,6 +12,7 @@ import {
   formatAddedDate,
   canMoveToCart
 } from '../utils/wishlistHelpers';
+import { getPrimaryImage } from '../../products/utils/productHelpers';
 
 /**
  * @component WishlistItem
@@ -44,21 +45,8 @@ const WishlistItem = ({
   const stock = product.stock ?? 0;
   const slug = product.slug || productId;
   
-  // ✅ EXTRACCIÓN DE IMAGEN
-  let imageUrl = null;
-  if (Array.isArray(product.images) && product.images.length > 0) {
-    const primaryImage = product.images.find(img => img.isPrimary === true);
-    if (primaryImage?.url) {
-      imageUrl = primaryImage.url;
-    } else {
-      const firstImage = product.images.find(img => img.url);
-      imageUrl = firstImage?.url || null;
-    }
-  } else if (product.image && typeof product.image === 'string') {
-    imageUrl = product.image;
-  } else if (product.thumbnail) {
-    imageUrl = product.thumbnail;
-  }
+  // ✅ EXTRACCIÓN DE IMAGEN (reutilizamos helper global)
+  const imageUrl = getPrimaryImage(product);
 
   const categoryName = product.mainCategory?.name || product.category?.name || null;
   const averageRating = product.rating?.average || product.rating || 0;
@@ -143,31 +131,30 @@ const WishlistItem = ({
         {/* ============================================================ */}
         {/* COLUMNA 1: IMAGEN (192px x 192px) */}
         {/* ============================================================ */}
-        <Link 
-          to={`/productos/${slug}`}
-          className="relative w-48 h-48 flex-shrink-0 bg-gray-100 dark:bg-gray-900 group overflow-hidden"
-        >
-          {imageUrl ? (
+          <Link 
+            to={`/productos/${slug}`}
+            className="relative w-48 h-48 flex-shrink-0 bg-gray-100 dark:bg-gray-900 group overflow-hidden"
+          >
             <img
               src={imageUrl}
               alt={name}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
               onError={(e) => {
                 e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'flex';
+                const placeholder = e.target.nextElementSibling;
+                if (placeholder) placeholder.style.display = 'flex';
               }}
             />
-          ) : null}
-          
-          {/* Placeholder */}
-          <div 
-            className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-900"
-            style={{ display: imageUrl ? 'none' : 'flex' }}
-          >
-            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </div>
+            
+            {/* Placeholder */}
+            <div 
+              className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-600 bg-gray-100 dark:bg-gray-900"
+              style={{ display: imageUrl ? 'none' : 'flex' }}
+            >
+              <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
 
           {/* Badges sobre la imagen */}
           <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">

@@ -46,6 +46,8 @@ const ProductDetailPage = lazy(() =>
   import("../../modules/products/pages/detalle/ProductoDetalle")
 );
 
+const CheckoutPage = lazy(() => import('../../app/checkout/Checkout'));
+
 const CategoriesPage = lazy(() =>
   import("../../modules/categories/pages/CategoriesPage")
 );
@@ -164,7 +166,13 @@ export default function AppRouter() {
           />
 
           <Route path="carrito" element={<CartPage />} />
+
           <Route path="lista-deseos" element={<PublicWishlistPage />} />
+
+          {/* Checkout - NUEVA RUTA */}
+          <Route path="checkout" element={<CheckoutPage />} />
+
+
         </Route>
 
         <Route path="auth/login" element={<LoginPage />} />

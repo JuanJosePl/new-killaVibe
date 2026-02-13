@@ -25,7 +25,7 @@ const BASE_URL = '/wishlist';
  * @throws {Error} 401 Unauthorized, 500 Internal Server Error
  */
 export const getWishlist = async () => {
-  const { data } = await axiosInstance.get(BASE_URL);
+  const data = await axiosInstance.get(BASE_URL);
   return data;
 };
 
@@ -52,7 +52,7 @@ export const getWishlist = async () => {
  * });
  */
 export const addItem = async (itemData) => {
-  const { data } = await axiosInstance.post(`${BASE_URL}/items`, itemData);
+  const data = await axiosInstance.post(`${BASE_URL}/items`, itemData);
   return data;
 };
 
@@ -69,7 +69,7 @@ export const addItem = async (itemData) => {
  * @throws {Error} 404 Not Found, 401 Unauthorized
  */
 export const removeItem = async (productId) => {
-  const { data } = await axiosInstance.delete(`${BASE_URL}/items/${productId}`);
+  const data = await axiosInstance.delete(`${BASE_URL}/items/${productId}`);
   return data;
 };
 
@@ -84,7 +84,7 @@ export const removeItem = async (productId) => {
  * @throws {Error} 404 Not Found, 401 Unauthorized
  */
 export const clearWishlist = async () => {
-  const { data } = await axiosInstance.delete(BASE_URL);
+  const data = await axiosInstance.delete(BASE_URL);
   return data;
 };
 
@@ -101,7 +101,7 @@ export const clearWishlist = async () => {
  * @throws {Error} 401 Unauthorized
  */
 export const checkProduct = async (productId) => {
-  const { data } = await axiosInstance.get(`${BASE_URL}/check/${productId}`);
+  const data = await axiosInstance.get(`${BASE_URL}/check/${productId}`);
   return data;
 };
 
@@ -121,7 +121,7 @@ export const checkProduct = async (productId) => {
  * await moveToCart(['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012']);
  */
 export const moveToCart = async (productIds) => {
-  const { data } = await axiosInstance.post(`${BASE_URL}/move-to-cart`, { productIds });
+  const data = await axiosInstance.post(`${BASE_URL}/move-to-cart`, { productIds });
   return data;
 };
 
@@ -149,7 +149,7 @@ export const moveToCart = async (productIds) => {
  * // ]
  */
 export const getPriceChanges = async () => {
-  const { data } = await axiosInstance.get(`${BASE_URL}/price-changes`);
+  const data = await axiosInstance.get(`${BASE_URL}/price-changes`);
   return data;
 };
 

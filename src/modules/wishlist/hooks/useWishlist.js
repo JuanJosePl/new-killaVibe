@@ -122,8 +122,13 @@ const useWishlist = () => {
    */
   const isInWishlist = useMemo(() => {
     return (productId) => {
-      if (!productId || !wishlist) return false;
-      return isProductInWishlist(wishlist, productId);
+      if (!productId || !wishlist?.items) return false;
+      
+      return wishlist.items.some(item => {
+        // Buscamos el ID en cualquier profundidad
+        const idEnLista = item.product?._id || item.product?.id || item.productId || item._id || item.id;
+        return String(idEnLista) === String(productId);
+      });
     };
   }, [wishlist]);
 

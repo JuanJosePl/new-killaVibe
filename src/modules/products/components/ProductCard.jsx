@@ -1,5 +1,4 @@
-// products/components/ProductCard.jsx
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   ShoppingCart,
   Heart,
@@ -17,8 +16,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-import { useProductCart } from "../hooks/useProductCart";
-import { useProductWishlist } from "../hooks/useProductWishlist";
+// Hooks reales integrados
+import { useCartContext } from "../../../modules/cart/context/CartContext";
+import { useWishlistContext } from "../../../modules/wishlist/context/WishlistContext";
 
 import {
   formatPrice,
@@ -29,75 +29,169 @@ import {
   isLowStock,
   isProductAvailable,
   getAvailabilityStatus,
+  getPrimaryImage,
 } from "../utils/productHelpers";
 
+/**
+ * @component ProductCard
+ * @description Componente de tarjeta de producto con efectos visuales avanzados y lógica de negocio.
+ * 
+ * ✅ FIXES APLICADOS:
+ * - Todas las variables correctamente extraídas del objeto product
+ * - Verificación correcta de productos en wishlist usando isInWishlist()
+ * - Estado local sincronizado con contexto global
+ * - Manejo correcto de agregar/quitar de wishlist
+ * - Integración correcta con CartContext
+ */
 export function ProductCard({
   product,
   className = "",
   showWishlistButton = true,
-  variant = "default",
+  onAddToCart,
+  onToggleWishlist,
 }) {
-  const {
-    isProductInCart,
+  // ============================================================================
+  // HOOKS DE CONTEXTO
+  // ============================================================================
+  const { 
+    addItem, 
+    isProductInCart, 
     getProductQuantity,
-    addProductToCart,
-    loading: cartLoading,
-  } = useProductCart();
+    loading: cartLoading 
+  } = useCartContext();
+  
+  const { 
+    isInWishlist, 
+    addItem: addToWishlist, 
+    removeItem: removeFromWishlist 
+  } = useWishlistContext();
 
-  const {
-    isProductInWishlist,
-    toggleProductWishlist,
-    loading: wishlistLoading,
-  } = useProductWishlist();
-
+  // ============================================================================
+  // ESTADOS LOCALES
+  // ============================================================================
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isImageError, setIsImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
 
-  const {
-    _id,
-    name,
-    slug,
-    price,
-    comparePrice,
-    image,
-    rating,
-    brand,
-    salesCount,
-    mainCategory,
-    stock,
-    isFeatured,
-  } = product;
+  // ============================================================================
+  // EXTRACCIÓN DE DATOS DEL PRODUCTO
+  // ============================================================================
+  
+  // Datos básicos
+  const _id = product?._id || product?.id;
+  const name = product?.name || "Producto sin nombre";
+  const slug = product?.slug || _id;
+  const price = product?.price || 0;
+  const comparePrice = product?.comparePrice || product?.originalPrice || 0;
+  const stock = product?.stock ?? 0;
+  const brand = product?.brand || null;
+  const isFeatured = product?.isFeatured || product?.featured || false;
+  const salesCount = product?.salesCount || product?.sales || 0;
+  
+  // Categoría
+  const mainCategory = product?.mainCategory || product?.category || null;
+  
+  // Rating
+  const rating = product?.rating || null;
+  const averageRating = rating?.average || 0;
+  const ratingCount = rating?.count || product?.numReviews || 0;
+  
+  // Imagen
+  const primaryImage = getPrimaryImage(product);
 
+  // ============================================================================
+  // CÁLCULOS DERIVADOS
+  // ============================================================================
+  
   const discountPercentage = calculateDiscountPercentage(comparePrice, price);
   const isNew = isNewProduct(product);
   const lowStock = isLowStock(product);
   const available = isProductAvailable(product);
   const availabilityStatus = getAvailabilityStatus(product);
 
-  const averageRating = rating?.average || null;
-  const ratingCount = rating?.count || 0;
-
+  // Estados del carrito
   const inCart = isProductInCart(_id);
   const quantityInCart = getProductQuantity(_id);
-  const inWishlist = isProductInWishlist(_id);
 
-  // ✅ FIX #1: Se elimina el guard `if (!inCart)`.
-  // El contexto ya maneja duplicados incrementando la cantidad.
-  // Ahora el botón siempre agrega/incrementa mientras haya stock y esté disponible.
+  // ============================================================================
+  // SINCRONIZACIÓN CON WISHLIST
+  // ============================================================================
+  
+  useEffect(() => {
+    if (_id) {
+      const inWishlist = isInWishlist(_id);
+      setIsFavorite(inWishlist);
+    }
+  }, [_id, isInWishlist]);
+
+  // ============================================================================
+  // HANDLERS
+  // ============================================================================
+
   const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!available || cartLoading) return;
+    if (!product || !_id) {
+      console.error("Error: Intentando agregar un producto inválido", product);
+      return;
+    }
 
-    await addProductToCart(product, 1);
+    if (!available) {
+      console.warn("Producto no disponible");
+      return;
+    }
+
+    try {
+      if (addItem) {
+        await addItem(product, 1, {});
+      } else if (onAddToCart) {
+        await onAddToCart(product, 1, {});
+      }
+    } catch (error) {
+      console.error("Error al agregar al carrito:", error);
+    }
   };
 
   const handleToggleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!wishlistLoading) {
-      await toggleProductWishlist(product);
+    
+    if (!_id) {
+      console.error("Producto sin ID válido");
+      return;
+    }
+
+    setIsWishlistLoading(true);
+
+    try {
+      if (isFavorite) {
+        // Quitar de wishlist
+        await removeFromWishlist(_id);
+        setIsFavorite(false);
+      } else {
+        // Agregar a wishlist
+        await addToWishlist({
+          productId: _id,
+          notifyPriceChange: false,
+          notifyAvailability: false,
+        });
+        setIsFavorite(true);
+      }
+
+      // Callback opcional (si se pasa desde padre)
+      if (onToggleWishlist) {
+        await onToggleWishlist(product);
+      }
+    } catch (error) {
+      console.error("Error toggling wishlist:", error);
+      // Revertir estado en caso de error
+      setIsFavorite(!isFavorite);
+    } finally {
+      setIsWishlistLoading(false);
     }
   };
 
@@ -113,7 +207,6 @@ export function ProductCard({
 
     if (inCart) {
       return {
-        // ✅ FIX: ahora muestra la cantidad y permite seguir agregando
         text: `En carrito (${quantityInCart}) · +1`,
         disabled: false,
         className: "bg-green-600 text-white hover:bg-green-700",
@@ -146,6 +239,7 @@ export function ProductCard({
           icon: ShoppingCart,
         };
 
+      case "available":
       case "in_stock":
       default:
         return {
@@ -160,6 +254,10 @@ export function ProductCard({
 
   const buttonConfig = getButtonConfig();
   const ButtonIcon = buttonConfig.icon;
+
+  // ============================================================================
+  // RENDER
+  // ============================================================================
 
   return (
     <div
@@ -212,21 +310,14 @@ export function ProductCard({
             <div className="absolute top-2 right-2 z-20">
               <button
                 onClick={handleToggleWishlist}
-                disabled={wishlistLoading}
-                className={`h-9 w-9 rounded-full backdrop-blur-sm shadow-md transition-all duration-200 flex items-center justify-center ${
-                  inWishlist
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-white/90 text-gray-700 hover:bg-white hover:scale-110"
-                } ${wishlistLoading ? "opacity-50 cursor-wait" : ""}`}
-                title={
-                  inWishlist ? "Quitar de favoritos" : "Agregar a favoritos"
-                }
+                disabled={isWishlistLoading}
+                className={`h-10 w-10 rounded-full backdrop-blur-md shadow-lg transition-all duration-300 flex items-center justify-center ${
+                  isFavorite 
+                    ? "bg-red-500 text-white scale-110" 
+                    : "bg-white/90 text-gray-700 hover:scale-110 hover:bg-red-50"
+                } ${isWishlistLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <Heart
-                  className={`h-4 w-4 transition-all ${
-                    inWishlist ? "fill-current" : ""
-                  }`}
-                />
+                <Heart className={`h-5 w-5 transition-all ${isFavorite ? "fill-current" : ""}`} />
               </button>
             </div>
           )}
@@ -240,54 +331,61 @@ export function ProductCard({
                 </div>
               )}
 
-              {image ? (
-                <img
-                  src={image}
-                  alt={name}
-                  className={`w-full h-full object-contain transition-all duration-500 ${
-                    imageLoaded ? "opacity-100 scale-100" : "opacity-0 scale-95"
-                  }`}
-                  onLoad={() => setImageLoaded(true)}
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-400">
-                  <Package className="h-16 w-16" />
-                </div>
-              )}
-            </div>
+              <img
+                src={isImageError ? getPrimaryImage({}) : primaryImage}
+                alt={name}
+                className={`h-full w-full object-cover transition-all duration-700 ${
+                  imageLoaded ? "opacity-100" : "opacity-0"
+                } ${isHovered ? "scale-110 rotate-2" : "scale-100 rotate-0"}`}
+                onLoad={() => {
+                  setIsImageLoaded(true);
+                  setImageLoaded(true);
+                }}
+                onError={() => {
+                  if (!isImageError) {
+                    setIsImageError(true);
+                    setIsImageLoaded(true);
+                    setImageLoaded(true);
+                  }
+                }}
+                loading="lazy"
+              />
 
-            <div
-              className={`absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-300 pointer-events-none ${
-                isHovered ? "opacity-100" : "opacity-0"
-              }`}
-            >
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded text-white text-[9px] font-semibold">
-                  <Truck className="h-2.5 w-2.5" />
-                  <span>Envío rápido</span>
-                </div>
-                <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded text-white text-[9px] font-semibold">
-                  <Shield className="h-2.5 w-2.5" />
-                  <span>Garantía</span>
+              {/* OVERLAY CON GRADIENTE */}
+              <div
+                className={`absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent transition-opacity duration-300 pointer-events-none ${
+                  isHovered ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                  <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded text-white text-[9px] font-semibold">
+                    <Truck className="h-2.5 w-2.5" />
+                    <span>Envío rápido</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-white/20 backdrop-blur-sm px-2 py-1 rounded text-white text-[9px] font-semibold">
+                    <Shield className="h-2.5 w-2.5" />
+                    <span>Garantía</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div
-              className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-                isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <button className="px-4 py-2 bg-white text-gray-900 rounded-lg font-semibold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 text-sm pointer-events-auto">
-                <Eye className="h-4 w-4" />
-                <span>Ver detalles</span>
-              </button>
+              {/* BOTÓN VER DETALLES */}
+              <div
+                className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
+                  isHovered ? "opacity-100" : "opacity-0 pointer-events-none"
+                }`}
+              >
+                <button className="px-4 py-2 bg-white text-gray-900 rounded-lg font-semibold shadow-xl hover:scale-105 transition-transform flex items-center gap-2 text-sm pointer-events-auto">
+                  <Eye className="h-4 w-4" />
+                  <span>Ver detalles</span>
+                </button>
+              </div>
             </div>
           </div>
 
           {/* INFORMACIÓN DEL PRODUCTO */}
           <div className="p-3 space-y-2">
+            {/* MARCA O CATEGORÍA */}
             {brand ? (
               <div className="flex items-center gap-1.5">
                 <Package className="h-3 w-3 text-primary/70" />
@@ -303,10 +401,12 @@ export function ProductCard({
               )
             )}
 
+            {/* NOMBRE */}
             <h3 className="font-semibold text-sm leading-tight line-clamp-2 text-gray-900 group-hover:text-primary transition-colors min-h-[2.5rem]">
               {name}
             </h3>
 
+            {/* RATING */}
             {averageRating > 0 && (
               <div className="flex items-center gap-1.5">
                 <div className="flex items-center text-yellow-400">
@@ -327,6 +427,7 @@ export function ProductCard({
               </div>
             )}
 
+            {/* PRECIO */}
             <div className="pt-1">
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
@@ -346,6 +447,7 @@ export function ProductCard({
               )}
             </div>
 
+            {/* BOTÓN AGREGAR AL CARRITO */}
             <button
               onClick={handleAddToCart}
               disabled={buttonConfig.disabled}
@@ -355,6 +457,7 @@ export function ProductCard({
               <span>{buttonConfig.text}</span>
             </button>
 
+            {/* ADVERTENCIA STOCK BAJO */}
             {available && availabilityStatus === "low_stock" && (
               <div className="text-center">
                 <span className="text-[10px] text-orange-600 font-semibold flex items-center justify-center gap-1">

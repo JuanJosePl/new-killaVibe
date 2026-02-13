@@ -1,15 +1,8 @@
 // wishlist/components/WishlistGrid.jsx
-
 import React from "react";
 import WishlistItem from "./WishlistItem";
 import WishlistEmptyState from "./WishlistEmptyState";
 
-/**
- * @component WishlistGrid
- * @description Grid de items de wishlist
- *
- * 🆕 CORREGIDO: Key único agregado
- */
 const WishlistGrid = ({
   items = [],
   onRemoveItem,
@@ -17,28 +10,28 @@ const WishlistGrid = ({
   loading = false,
   emptyState,
 }) => {
-  // Si no hay items, mostrar estado vacío
   if (!items || items.length === 0) {
     return <WishlistEmptyState {...emptyState} />;
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {items.map((item, index) => {
-        // 🆕 GENERAR KEY ÚNICO
-        const productId =
-          item.product?._id ||
-          item.product?.id ||
-          item.productId ||
-          `item-${index}`;
-        const key = `wishlist-item-${productId}`;
+        // Obtenemos el ID real para la key y las acciones
+        const productData = item?.product || item;
+        const safeId = productData?._id || productData?.id || item?.productId;
+
+        // Si no hay ID válido, usar índice como fallback (pero loguear advertencia)
+        if (!safeId) {
+          console.warn('[WishlistGrid] Item sin ID válido:', item);
+        }
 
         return (
           <WishlistItem
-            key={key}
+            key={safeId || `wishlist-item-${index}`}
             item={item}
-            onRemove={onRemoveItem}
-            onMoveToCart={onMoveToCart}
+            onRemove={onRemoveItem ? () => onRemoveItem(safeId) : undefined}
+            onMoveToCart={onMoveToCart ? () => onMoveToCart(safeId) : undefined}
             loading={loading}
           />
         );

@@ -98,77 +98,7 @@ export default function Footer() {
       </div>
 
       <div className="container mx-auto px-4 relative z-10">
-        {/* Newsletter Section */}
-        <div className="py-12 border-b border-border/50">
-          <div className="max-w-4xl mx-auto text-center space-y-6">
-            <div className="inline-flex items-center space-x-2 bg-gradient-to-r from-primary/10 to-accent/10 px-5 py-2 rounded-full backdrop-blur-sm border border-primary/20">
-              <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-              <span className="text-sm font-semibold uppercase tracking-wide bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Newsletter
-              </span>
-            </div>
 
-            <h3 className="text-2xl sm:text-3xl font-bold">
-              Únete a la{" "}
-              <span className="gradient-text bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                vibra Killa
-              </span>
-            </h3>
-
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Suscríbete y recibe ofertas exclusivas, lanzamientos de productos y
-              tips tecnológicos directamente en tu correo
-            </p>
-
-            {/* Newsletter Form */}
-            <form
-              onSubmit={handleNewsletterSubmit}
-              className="max-w-md mx-auto flex gap-2"
-            >
-              <div className="relative flex-1">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@email.com"
-                  className="w-full pl-12 pr-4 py-4 rounded-full bg-background border-2 border-border focus:border-primary outline-none transition-all duration-300 text-foreground placeholder:text-muted-foreground"
-                  required
-                  disabled={isLoading || isSubscribed}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isLoading || isSubscribed}
-                className="px-8 py-4 bg-gradient-to-r from-primary to-accent text-white rounded-full font-semibold hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Enviando...</span>
-                  </>
-                ) : isSubscribed ? (
-                  <>
-                    <CheckCircle2 className="h-5 w-5" />
-                    <span>¡Listo!</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-5 w-5" />
-                    <span className="hidden sm:inline">Suscribirse</span>
-                  </>
-                )}
-              </button>
-            </form>
-
-            {isSubscribed && (
-              <p className="text-green-500 text-sm font-semibold animate-fade-in">
-                ✨ ¡Gracias por unirte! Revisa tu email para confirmar la
-                suscripción.
-              </p>
-            )}
-          </div>
-        </div>
 
         {/* Main Footer Content */}
         <div className="py-16">

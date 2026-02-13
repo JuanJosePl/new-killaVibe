@@ -1,6 +1,9 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
+import { useProductCart } from "../hooks/useProductCart";
+import { useProductWishlist } from "../hooks/useProductWishlist";
+import  productsAPI  from "../api/products.api";
 
 // ✅ Hook real de productos (Context)
 import { useProducts } from "../contexts/ProductsContext";
@@ -19,20 +22,52 @@ import { ProductCard } from "./ProductCard";
  * 4. Estados loading/error/empty correctos
  */
 export function FeaturedProducts() {
-  // ✅ Usar context correctamente
-  const { featuredProducts, loading, error, fetchFeaturedProducts } =
-    useProducts();
+  // ✅ CORRECCIÓN: Usar getFeaturedProducts() en lugar de getProducts()
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // ✅ Fetch productos destacados al montar
+  const { quickAddToCart } = useProductCart();
+  const { toggleProductWishlist, isProductInWishlist } = useProductWishlist();
+
   useEffect(() => {
-    if (!featuredProducts || featuredProducts.length === 0) {
-      fetchFeaturedProducts(8);
-    }
-  }, []);
+    let isMounted = true;
 
-  // ============================================================================
-  // ESTADOS
-  // ============================================================================
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // ✅ USAR EL ENDPOINT CORRECTO
+        const response = await productsAPI.getFeaturedProducts(8);
+
+        if (!isMounted) return;
+
+        if (response.success && response.data) {
+          setFeaturedProducts(response.data);
+        } else if (response.count && response.data) {
+          setFeaturedProducts(response.data);
+        } else {
+          setFeaturedProducts([]);
+        }
+      } catch (err) {
+        if (isMounted && err.name !== 'AbortError') {
+          console.error('[FeaturedProducts] Error:', err);
+          setError(err.message || 'Error al cargar productos');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchProducts();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (loading) {
     return (

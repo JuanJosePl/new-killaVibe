@@ -29,15 +29,10 @@ export const getItemCount = (wishlist) => {
  * Maneja caso de producto sin popular (solo ID)
  */
 export const isProductInWishlist = (wishlist, productId) => {
-  if (!wishlist || !wishlist.items || !productId) return false;
-  
+  if (!wishlist || !wishlist.items) return false;
   return wishlist.items.some(item => {
-    // Si product es un objeto poblado
-    if (typeof item.product === 'object' && item.product !== null) {
-      return item.product._id === productId || item.product.id === productId;
-    }
-    // Si product es solo un string (ID sin popular)
-    return item.product === productId;
+    const id = item.product?._id || item.product?.id || item.productId || item._id || item.id;
+    return String(id) === String(productId);
   });
 };
 
@@ -107,12 +102,14 @@ export const formatPriceChange = (item) => {
  * Formatea el porcentaje de cambio de precio
  */
 export const formatPriceChangePercentage = (item) => {
-  if (!item || !item.priceChanged || !item.priceWhenAdded || !item.product?.price) {
+  // 🔍 NORMALIZACIÓN: Buscar el producto en item.product o en item
+  const product = item.product || item; 
+  if (!item.priceChanged || !item.priceWhenAdded || !product?.price) {
     return '';
   }
   
   const percentage = (
-    (item.product.price - item.priceWhenAdded) / item.priceWhenAdded * 100
+    (product.price - item.priceWhenAdded) / item.priceWhenAdded * 100
   ).toFixed(1);
   
   const sign = percentage > 0 ? '+' : '';
@@ -123,14 +120,16 @@ export const formatPriceChangePercentage = (item) => {
  * Formatea precio con moneda
  */
 export const formatPrice = (amount, currency = 'USD') => {
-  const num = Number(amount) || 0;
+  // CORRECCIÓN: Manejar strings que vienen del input o valores nulos
+  const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numericAmount) || numericAmount === null) return '$0.00';
   
   return new Intl.NumberFormat('en-US', {
-    style: 'currency',
+    style: currency === 'USD' ? 'currency' : 'decimal',
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(num);
+  }).format(numericAmount);
 };
 
 /**
@@ -248,40 +247,19 @@ export const getPriceChangeBadgeClass = (item) => {
  * Usa isPublished en lugar de status
  */
 export const canMoveToCart = (item) => {
-  if (!item || !item.product) {
-    return {
-      canMove: false,
-      reason: 'Datos de producto inválidos'
-    };
-  }
+  // 🔍 NORMALIZACIÓN
+  const product = item.product || item; 
+  
+  // Si no hay nombre, es un objeto corrupto o vacío
+  if (!product.name && !product.title) return { canMove: false, reason: 'Datos incompletos' };
 
-  if (!item.isAvailable) {
-    return {
-      canMove: false,
-      reason: 'Producto no disponible'
-    };
-  }
+  // Priorizar el estado de disponibilidad del item, luego del producto
+  const available = item.isAvailable ?? product.isAvailable ?? (product.stock > 0);
+
+  if (!available) return { canMove: false, reason: 'No disponible' };
+  if (product.stock === 0) return { canMove: false, reason: 'Sin stock' };
   
-  const stock = Number(item.product.stock) || 0;
-  if (stock === 0) {
-    return {
-      canMove: false,
-      reason: 'Sin stock'
-    };
-  }
-  
-  // 🆕 CORREGIDO: Usa isPublished en lugar de status
-  if (item.product.isPublished === false) {
-    return {
-      canMove: false,
-      reason: 'Producto no publicado'
-    };
-  }
-  
-  return {
-    canMove: true,
-    reason: ''
-  };
+  return { canMove: true, reason: '' };
 };
 
 export default {

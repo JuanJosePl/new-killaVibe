@@ -9,7 +9,7 @@ import React, {
   useRef,
 } from "react";
 import * as wishlistAPI from "../api/wishlist.api";
-import { isWishlistEmpty, getItemCount } from "../utils/wishlistHelpers";
+import { isWishlistEmpty, getItemCount, isProductInWishlist } from "../utils/wishlistHelpers";
 
 const WishlistContext = createContext(null);
 
@@ -20,7 +20,7 @@ const WISHLIST_CACHE_CONFIG = {
 const WISHLIST_STORAGE_KEY = "killavibes_wishlist_guest";
 
 export const WishlistProvider = ({ children }) => {
-  const [wishlist, setWishlist] = useState(null);
+  const [wishlist, setWishlist] = useState({ items: [], itemCount: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [initialized, setInitialized] = useState(false);
@@ -46,7 +46,7 @@ export const WishlistProvider = ({ children }) => {
   }, []);
 
   /**
-   * 🆕 GUARDAR WISHLIST GUEST EN LOCALSTORAGE
+   * GUARDAR WISHLIST GUEST EN LOCALSTORAGE
    */
   const saveGuestWishlist = useCallback((items) => {
     try {
@@ -57,7 +57,7 @@ export const WishlistProvider = ({ children }) => {
   }, []);
 
   /**
-   * 🆕 CARGAR WISHLIST GUEST DE LOCALSTORAGE
+   * CARGAR WISHLIST GUEST DE LOCALSTORAGE
    */
   const loadGuestWishlist = useCallback(() => {
     try {
@@ -81,7 +81,7 @@ export const WishlistProvider = ({ children }) => {
   }, []);
 
   /**
-   * 🆕 NORMALIZAR ESTRUCTURA WISHLIST
+   * NORMALIZAR ESTRUCTURA WISHLIST
    */
   const normalizeWishlistStructure = useCallback((items) => {
     return {
@@ -283,45 +283,48 @@ export const WishlistProvider = ({ children }) => {
     ]
   );
 
-  const clearWishlistItems = useCallback(async () => {
-    const auth = localStorage.getItem("killavibes_auth");
+  const clearWishlistItems = useCallback(
+    async () => {
+      const auth = localStorage.getItem("killavibes_auth");
 
-    // MODO GUEST
-    if (!auth) {
-      setLoading(true);
+      // MODO GUEST
+      if (!auth) {
+        setLoading(true);
+        try {
+          localStorage.removeItem(WISHLIST_STORAGE_KEY);
+          const emptyWishlist = { items: [], itemCount: 0 };
+          setWishlist(emptyWishlist);
+          updateCache(emptyWishlist);
+          return emptyWishlist;
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      // MODO AUTENTICADO
       try {
-        localStorage.removeItem(WISHLIST_STORAGE_KEY);
-        const emptyWishlist = { items: [], itemCount: 0 };
-        setWishlist(emptyWishlist);
-        updateCache(emptyWishlist);
-        return emptyWishlist;
+        setLoading(true);
+        setError(null);
+
+        const response = await wishlistAPI.clearWishlist();
+        const updatedWishlist = response.data;
+
+        setWishlist(updatedWishlist);
+        updateCache(updatedWishlist);
+
+        return updatedWishlist;
+      } catch (err) {
+        console.error("[WishlistContext] Error clearing wishlist:", err);
+        const errorMsg =
+          err.response?.data?.message || "Error al vaciar wishlist";
+        setError(errorMsg);
+        throw err;
       } finally {
         setLoading(false);
       }
-    }
-
-    // MODO AUTENTICADO
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await wishlistAPI.clearWishlist();
-      const updatedWishlist = response.data;
-
-      setWishlist(updatedWishlist);
-      updateCache(updatedWishlist);
-
-      return updatedWishlist;
-    } catch (err) {
-      console.error("[WishlistContext] Error clearing wishlist:", err);
-      const errorMsg =
-        err.response?.data?.message || "Error al vaciar wishlist";
-      setError(errorMsg);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [updateCache]);
+    },
+    [updateCache]
+  );
 
   const checkProduct = useCallback(
     async (productId) => {
@@ -399,7 +402,7 @@ export const WishlistProvider = ({ children }) => {
   }, [fetchWishlist]);
 
   // ============================================================================
-  // 🆕 FUNCIONES DE MIGRACIÓN
+  // FUNCIONES DE MIGRACIÓN
   // ============================================================================
 
   const migrateGuestWishlistToUser = useCallback(async () => {
@@ -481,18 +484,22 @@ export const WishlistProvider = ({ children }) => {
   }, []);
 
   // ============================================================================
+  // ✅ FUNCIÓN isInWishlist (verificar si producto está en wishlist)
+  // ============================================================================
+  const isInWishlist = useCallback(
+    (productId) => {
+      return isProductInWishlist(wishlist, productId);
+    },
+    [wishlist]
+  );
+
+  // ============================================================================
   // INICIALIZACIÓN
   // ============================================================================
 
   useEffect(() => {
-    if (!initialized) {
-      fetchWishlist();
-    }
+    if (!initialized) fetchWishlist();
   }, [initialized, fetchWishlist]);
-
-  // ============================================================================
-  // HELPERS COMPUTADOS
-  // ============================================================================
 
   const isEmpty = isWishlistEmpty(wishlist);
   const itemCount = getItemCount(wishlist);
@@ -502,17 +509,17 @@ export const WishlistProvider = ({ children }) => {
   // ============================================================================
 
   const value = {
-    // Estado
     wishlist,
     loading,
     error,
     initialized,
-
-    // Helpers
     isEmpty,
     itemCount,
-
-    // Acciones
+    
+    // ✅ AGREGADO: isInWishlist
+    isInWishlist,
+    
+    // Acciones CRUD
     fetchWishlist,
     addItem,
     removeItem,
@@ -526,16 +533,12 @@ export const WishlistProvider = ({ children }) => {
     clearCache,
     setError,
 
-    // 🆕 FUNCIONES DE SINCRONIZACIÓN
+    // Funciones de sincronización
     migrateGuestWishlistToUser,
     clearGuestWishlist,
   };
 
-  return (
-    <WishlistContext.Provider value={value}>
-      {children}
-    </WishlistContext.Provider>
-  );
+  return <WishlistContext.Provider value={value}>{children}</WishlistContext.Provider>;
 };
 
 export const useWishlistContext = () => {

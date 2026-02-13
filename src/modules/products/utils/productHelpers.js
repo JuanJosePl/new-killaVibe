@@ -3,6 +3,8 @@
  * @description Utilidades para manejo de productos
  */
 
+import { PLACEHOLDERS } from "../types/product.types";
+
 /**
  * Calcula el porcentaje de descuento
  * @param {number} comparePrice
@@ -26,19 +28,45 @@ export const calculateSavings = (comparePrice, price) => {
 };
 
 /**
- * Verifica si el producto está disponible
+ * Verifica si el producto está disponible para la venta.
+ *
+ * Nota importante:
+ * - Muchos productos vienen sin flags como `isPublished` o `isActive`.
+ * - No queremos marcar "Agotado" solo porque el backend no envía esos campos.
+ *
+ * Reglas:
+ * - Si `status` existe y NO es "active" → NO disponible.
+ * - Si `visibility` existe y NO es "public" → NO disponible.
+ * - Si `isPublished` o `isActive` son explícitamente `false` → NO disponible.
+ * - Stock:
+ *   - Si `trackQuantity` es true → requiere `stock > 0` o `allowBackorder === true`.
+ *   - Si `trackQuantity` es false o no existe → se considera disponible a menos que se indique lo contrario.
+ *
  * @param {Object} product
  * @returns {boolean}
  */
 export const isProductAvailable = (product) => {
   if (!product) return false;
-  
-  return (
-    product.status === 'active' &&
-    product.isPublished === true &&
-    product.isActive === true &&
-    (product.stock > 0 || product.allowBackorder === true)
-  );
+
+  // Estado y visibilidad (solo bloquean si vienen con valores "malos")
+  if (product.status && product.status !== "active") return false;
+  if (product.visibility && product.visibility !== "public") return false;
+
+  // Flags de publicación: solo bloquean si son explícitamente false
+  if (product.isPublished === false) return false;
+  if (product.isActive === false) return false;
+
+  // Stock y backorder
+  const trackQuantity = product.trackQuantity === true;
+  const stock = Number(product.stock ?? 0);
+  const allowBackorder = product.allowBackorder === true;
+
+  if (trackQuantity) {
+    return stock > 0 || allowBackorder;
+  }
+
+  // Si no se controla stock, asumimos disponible
+  return true;
 };
 
 /**
@@ -62,17 +90,77 @@ export const isOutOfStock = (product) => {
 };
 
 /**
- * Obtiene la imagen principal del producto
+ * Obtiene la imagen principal del producto de forma robusta
+ * - Soporta arrays de objetos { url, secure_url, path, imageUrl }
+ * - Soporta arrays de strings con URLs directas
+ * - Soporta campos sueltos: image, thumbnail, primaryImage, mainImageUrl
+ * - Devuelve siempre un string (usa placeholder si no hay nada válido)
+ *
  * @param {Object} product
- * @returns {string|null}
+ * @returns {string}
+ */
+/**
+ * Obtiene la imagen principal del producto de forma robusta
+ * - Soporta arrays de objetos { url, secure_url, path, imageUrl }
+ * - Soporta arrays de strings con URLs directas
+ * - Soporta campos sueltos: image, thumbnail, primaryImage, mainImageUrl
+ * - Devuelve siempre un string (usa placeholder real si no hay nada válido)
+ *
+ * @param {Object} product
+ * @returns {string}
  */
 export const getPrimaryImage = (product) => {
-  if (!product || !product.images || product.images.length === 0) {
-    return null;
+  // 1. DEFINIR EL FALLBACK REAL
+  // Según tu arbol.txt, este archivo sí existe en tu carpeta /public
+  const fallback = "/parlante-rosa-con-orejitas-de-gato-brillantes-para.jpg";
+
+  if (!product) return fallback;
+
+  // Función interna para normalizar la extracción de la URL
+  const pickUrl = (img) => {
+    if (!img) return null;
+    // Si ya es un string, lo devolvemos (ej: product.images = ["url1.jpg"])
+    if (typeof img === "string") return img;
+    // Si es un objeto, buscamos en todas las propiedades posibles del backend
+    return (
+      img.url ||
+      img.secure_url ||
+      img.path ||
+      img.imageUrl ||
+      img.src ||
+      null
+    );
+  };
+
+  // 2. INTENTO POR ARRAY DE IMÁGENES (product.images)
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    // Prioridad A: Buscar la que el usuario marcó como principal
+    const primaryImageObj = product.images.find((img) => img?.isPrimary === true);
+    const primaryUrl = pickUrl(primaryImageObj);
+    if (primaryUrl) return primaryUrl;
+
+    // Prioridad B: Si no hay principal, tomar la primera del array
+    const firstUrl = pickUrl(product.images[0]);
+    if (firstUrl) return firstUrl;
   }
-  
-  const primaryImage = product.images.find(img => img.isPrimary);
-  return primaryImage ? primaryImage.url : product.images[0].url;
+
+  // 3. INTENTO POR CAMPOS SINGULARES (Compatibilidad con distintos esquemas)
+  const singleSources = [
+    product.primaryImage,
+    product.mainImage,
+    product.mainImageUrl,
+    product.image,     // El campo común en muchos JSON
+    product.thumbnail,
+  ];
+
+  for (const src of singleSources) {
+    const url = pickUrl(src);
+    if (url) return url;
+  }
+
+  // 4. FALLBACK FINAL
+  // Si llegó aquí, el array estaba vacío y no había campos de imagen
+  return fallback;
 };
 
 /**

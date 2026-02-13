@@ -91,60 +91,59 @@ export function HeroSection() {
     };
   }, []);
 
-  // ==========================================================================
-  // FETCH FEATURED PRODUCTS
-  // ==========================================================================
-  
- useEffect(() => {
+// ============================================================================
+// FETCH FEATURED PRODUCTS - ✅ CORREGIDO
+// ============================================================================
+
+useEffect(() => {
   let isMounted = true;
+  const controller = new AbortController();
 
   const fetchFeaturedProducts = async () => {
-  try {
-    setLoading(true);
-    setError(null);
+    try {
+      setLoading(true);
+      setError(null);
 
-    const response = await productsAPI.getProducts({
-      featured: true,
-      limit: 4,
-      status: 'active',
-      visibility: 'public',
-      sort: 'createdAt',
-      order: 'desc',
-    });
+      // ✅ CORRECCIÓN: Usar getFeaturedProducts() directamente
+      const response = await productsAPI.getFeaturedProducts(4);
 
-    // --- CORRECCIÓN AQUÍ ---
-    // 1. Extraemos la data sin importar si viene en .data o directa
-    const data = response.data || response;
+      if (!isMounted) return;
 
-    // 2. Si hay datos y es un array, es un ÉXITO, no importa lo demás
-    if (isMounted && (Array.isArray(data) || response.success)) {
-      const finalProducts = Array.isArray(data) ? data : (data.products || []);
-      setFeaturedProducts(finalProducts.slice(0, 4));
-    } 
-    // 3. Solo lanzamos error si NO hay datos de verdad
-    else if (isMounted) {
-      throw new Error(response.message || 'No se encontraron productos');
+      // ✅ CORRECCIÓN: Manejar respuesta correctamente
+      if (response.success && response.data) {
+        setFeaturedProducts(response.data.slice(0, 4));
+      } else if (response.data && Array.isArray(response.data)) {
+        // Fallback si viene array directo
+        setFeaturedProducts(response.data.slice(0, 4));
+      } else {
+        throw new Error('No se encontraron productos destacados');
+      }
+
+    } catch (err) {
+      // ✅ Ignorar si fue abort
+      if (err.name === 'AbortError' || err.name === 'CanceledError') {
+        return;
+      }
+
+      console.error('[HeroSection] Error fetching featured products:', err);
+      
+      if (isMounted) {
+        setError(err.message || 'Error al cargar productos destacados');
+      }
+    } finally {
+      if (isMounted) {
+        setLoading(false);
+      }
     }
-
-  } catch (err) {
-    // Si el error dice "Exitosamente", lo ignoramos para no ensuciar la consola
-    if (err.message?.includes('exitosamente')) return;
-
-    console.error('[HeroSection] Error fetching featured products:', err);
-    if (isMounted) {
-      setError(err.message || 'Error al cargar productos destacados');
-    }
-  } finally {
-    if (isMounted) setLoading(false);
-  }
-};
+  };
 
   fetchFeaturedProducts();
 
   return () => {
     isMounted = false;
+    controller.abort();
   };
-}, []);
+}, []); // ✅ Sin dependencias, solo se ejecuta una vez
 
   // ==========================================================================
   // AUTO-SLIDE CAROUSEL
