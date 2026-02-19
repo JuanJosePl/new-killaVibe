@@ -1,30 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { formatPrice, formatAttributes, getStockMessage } from '../utils/cartHelpers';
 import { getPrimaryImage } from '../../products/utils/productHelpers';
-import { CART_LIMITS } from '../types/cart.types';
+import { CART_LIMITS } from '../domain/cart.constants';
+import { formatPrice, formatAttributes, getStockMessage } from '../utils/cart.helpers';
 import productsAPI from '../../products/api/products.api';
+import useCart from '../presentation/hooks/useCart';
+import useCartActions from '../presentation/hooks/useCartActions';
 
 /**
  * @component CartItem
- * @description Tarjeta individual de producto en el carrito
+ * @description Tarjeta individual de producto en el carrito.
+ *
+ * MIGRADO: eliminado onUpdateQuantity / onRemove como props.
+ * Ahora consume useCart (isItemLoading) + useCartActions directamente.
+ * La UI es idéntica al original.
+ *
+ * @param {Object}  item     - CartItem canónico { productId, product, quantity, price, attributes }
+ * @param {boolean} [disabled]
  */
-const CartItem = ({
-  item,
-  onUpdateQuantity,
-  onRemove,
-  loading = false,
-  disabled = false,
-}) => {
-  const [quantity, setQuantity] = useState(item.quantity);
-  const [isUpdating, setIsUpdating] = useState(false);
+const CartItem = ({ item, disabled = false }) => {
+  // ── HOOKS ─────────────────────────────────────────────────────────────────
+  const { isItemLoading } = useCart();
+  const { updateQuantity, removeFromCart } = useCartActions(
+    (msg) => toast.success(String(msg)),
+    (msg) => toast.error(typeof msg === 'string' ? msg : msg?.message || 'Error en el carrito')
+  );
 
-  const product = item.product || {};
-  const hasDiscount = item.discount > 0;
-  const itemTotal = item.price * item.quantity;
-  const isLowStock = product.stock > 0 && product.stock <= 5;
+  // ── DATOS DEL ITEM ────────────────────────────────────────────────────────
+  const product     = item?.product || {};
+  const productId   = item?.productId || product._id || product.id;
+  const hasDiscount = (item?.discount || 0) > 0;
+  const itemTotal   = (item?.price || 0) * (item?.quantity || 0);
+  const isLowStock  = product.stock > 0 && product.stock <= 5;
 
-  // Imagen calculada
+  // ── LOADING GRANULAR ──────────────────────────────────────────────────────
+  // isItemLoading usa el Set del store → no bloquea otros items
+  const isUpdating = isItemLoading(productId);
+
+  // ── ESTADO LOCAL DE CANTIDAD ──────────────────────────────────────────────
+  // Se sincroniza con item.quantity cuando el store actualiza
+  const [quantity, setQuantity] = useState(item?.quantity || 1);
+
+  useEffect(() => {
+    setQuantity(item?.quantity || 1);
+  }, [item?.quantity]);
+
+  // ── IMAGEN (lógica original intacta) ──────────────────────────────────────
   const [imageUrl, setImageUrl] = useState(() => getPrimaryImage(product));
 
   useEffect(() => {
@@ -56,70 +77,55 @@ const CartItem = ({
         }
 
         if (!isMounted || !response?.success || !response.data) return;
-
-        const fullProduct = response.data;
-        setImageUrl(getPrimaryImage(fullProduct));
-      } catch (error) {
-        console.error('[CartItem] Error cargando imagen completa del producto:', error);
+        setImageUrl(getPrimaryImage(response.data));
+      } catch {
+        // silent — placeholder ya se muestra
       }
     };
 
     fetchFullProduct();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [product._id, product.id, product.slug]);
 
-  // ============================================================================
-  // HANDLERS
-  // ============================================================================
+  // ── GUARD ─────────────────────────────────────────────────────────────────
+  if (!productId) return null;
+
+  // ── HANDLERS ──────────────────────────────────────────────────────────────
 
   const handleQuantityChange = async (newQuantity) => {
-    // Validar límites
     if (newQuantity < 1 || newQuantity > CART_LIMITS.MAX_QUANTITY) return;
 
-    // Validar stock disponible
-    if (newQuantity > product.stock) {
+    if (product.trackQuantity && newQuantity > product.stock) {
       toast.error(`Solo hay ${product.stock} unidades disponibles`);
       return;
     }
 
-    setIsUpdating(true);
-    try {
-      await onUpdateQuantity(product._id, newQuantity, item.attributes);
-      setQuantity(newQuantity);
-    } catch (error) {
-      console.error('[CartItem] Error actualizando cantidad:', error);
-      setQuantity(item.quantity);
-      toast.error(error.message || 'Error al actualizar cantidad');
-    } finally {
-      setIsUpdating(false);
+    // Optimistic UI: actualizar visualmente antes del resultado
+    setQuantity(newQuantity);
+    const result = await updateQuantity(productId, newQuantity, item?.attributes || {});
+
+    // Revertir si falla
+    if (!result?.success) {
+      setQuantity(item?.quantity || 1);
     }
   };
 
-  const handleIncrement = () => {
-    handleQuantityChange(quantity + 1);
-  };
-
+  const handleIncrement = () => handleQuantityChange(quantity + 1);
   const handleDecrement = () => {
-    if (quantity > 1) {
-      handleQuantityChange(quantity - 1);
-    }
+    if (quantity > 1) handleQuantityChange(quantity - 1);
   };
 
   const handleRemove = async () => {
     if (window.confirm('¿Estás seguro de eliminar este producto?')) {
-      await onRemove(product._id, item.attributes);
+      await removeFromCart(productId, item?.attributes || {});
     }
   };
 
-  // ============================================================================
-  // RENDER
-  // ============================================================================
+  // ── RENDER (idéntico al original) ─────────────────────────────────────────
 
   return (
     <div className="flex gap-4 p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow relative">
+
       {/* Imagen del Producto */}
       <div className="relative flex-shrink-0 w-24 h-24 bg-gray-100 rounded-md overflow-hidden">
         <img
@@ -132,9 +138,7 @@ const CartItem = ({
             if (placeholder) placeholder.style.display = 'flex';
           }}
         />
-        <div
-          className="absolute inset-0 hidden items-center justify-center text-gray-400 text-xs bg-gray-100"
-        >
+        <div className="absolute inset-0 hidden items-center justify-center text-gray-400 text-xs bg-gray-100">
           Sin imagen
         </div>
       </div>
@@ -148,7 +152,7 @@ const CartItem = ({
             </h3>
 
             {/* Atributos */}
-            {item.attributes && Object.keys(item.attributes).length > 0 && (
+            {item?.attributes && Object.keys(item.attributes).length > 0 && (
               <p className="text-sm text-gray-500 mt-1">
                 {formatAttributes(item.attributes)}
               </p>
@@ -157,9 +161,9 @@ const CartItem = ({
             {/* Precio */}
             <div className="flex items-center gap-2 mt-2">
               <span className="text-lg font-bold text-gray-900">
-                {formatPrice(item.price)}
+                {formatPrice(item?.price || 0)}
               </span>
-              {hasDiscount && item.originalPrice && (
+              {hasDiscount && item?.originalPrice && (
                 <>
                   <span className="text-sm text-gray-400 line-through">
                     {formatPrice(item.originalPrice)}
@@ -193,7 +197,7 @@ const CartItem = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleDecrement}
-              disabled={disabled || loading || isUpdating || quantity <= 1}
+              disabled={disabled || isUpdating || quantity <= 1}
               className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Disminuir cantidad"
             >
@@ -204,12 +208,10 @@ const CartItem = ({
               type="number"
               value={quantity}
               onChange={(e) => {
-                const val = parseInt(e.target.value);
-                if (!isNaN(val)) {
-                  handleQuantityChange(val);
-                }
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val)) handleQuantityChange(val);
               }}
-              disabled={disabled || loading || isUpdating}
+              disabled={disabled || isUpdating}
               className="w-16 text-center border border-gray-300 rounded-md py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
               min={CART_LIMITS.MIN_QUANTITY}
               max={Math.min(
@@ -221,10 +223,9 @@ const CartItem = ({
             <button
               onClick={handleIncrement}
               disabled={
-                disabled || 
-                loading || 
-                isUpdating || 
-                quantity >= product.stock
+                disabled ||
+                isUpdating ||
+                (product.trackQuantity && quantity >= product.stock)
               }
               className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               aria-label="Aumentar cantidad"
@@ -236,17 +237,17 @@ const CartItem = ({
           {/* Botón Eliminar */}
           <button
             onClick={handleRemove}
-            disabled={disabled || loading}
+            disabled={disabled || isUpdating}
             className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Eliminar
           </button>
         </div>
 
-        {/* Loading Overlay */}
-        {(loading || isUpdating) && (
+        {/* Loading Overlay (solo para este item) */}
+        {isUpdating && (
           <div className="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center rounded-lg">
-            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         )}
       </div>

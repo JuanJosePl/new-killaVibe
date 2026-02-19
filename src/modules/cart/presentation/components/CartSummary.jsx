@@ -1,32 +1,50 @@
 import React from 'react';
-import { formatPrice, formatDiscount } from '../utils/cartHelpers';
-import { CART_THRESHOLDS } from '../types/cart.types';
+import { formatPrice, formatDiscount } from '../utils/cart.helpers';
+import { CART_THRESHOLDS } from '../domain/cart.constants';
+import useCart from '../presentation/hooks/useCart';
 
 /**
  * @component CartSummary
- * @description Resumen visual de totales del carrito
- * 
- * PROPS:
- * @param {Object} summary - Objeto con totales calculados
- * @param {Object} cart - Carrito completo
- * @param {Function} onCheckout - Callback para proceder al checkout
- * @param {boolean} loading - Estado de carga
- * @param {boolean} showCheckoutButton - Mostrar botón de checkout
+ * @description Resumen visual de totales del carrito.
+ *
+ * MIGRADO: ya no recibe `summary` ni `cart` como props.
+ * Lee todo directamente de useCart().
+ * Acepta `onCheckout` y `loading` como props para compatibilidad con CartPage.
+ * UI idéntica al original.
+ *
+ * @param {Function} [onCheckout]         - Callback para ir al pago
+ * @param {boolean}  [loading]            - Forzar estado loading (prop legado)
+ * @param {boolean}  [showCheckoutButton] - Mostrar botón de checkout
  */
 const CartSummary = ({
-  summary,
-  cart,
   onCheckout,
-  loading = false,
-  showCheckoutButton = true
+  loading: externalLoading = false,
+  showCheckoutButton = true,
 }) => {
-  if (!summary) {
-    return null;
-  }
+  const {
+    summary,
+    cart,
+    loading,
+    hasCoupon,
+    coupon,
+    isEmpty,
+  } = useCart();
 
-  const hasCoupon = cart?.coupon?.code;
-  const hasShippingDiscount = summary.shippingDiscount > 0;
-  const freeShippingRemaining = CART_THRESHOLDS.MIN_FREE_SHIPPING - summary.subtotal;
+  const isLoading = externalLoading || loading.global;
+
+  if (!summary) return null;
+
+  const {
+    subtotal,
+    discount,
+    shipping,
+    tax,
+    total,
+    itemCount,
+    savings,
+  } = summary;
+
+  const freeShippingRemaining = CART_THRESHOLDS.MIN_FREE_SHIPPING - subtotal;
   const qualifiesForFreeShipping = freeShippingRemaining <= 0;
 
   return (
@@ -38,40 +56,40 @@ const CartSummary = ({
       {/* Subtotal */}
       <div className="space-y-3 mb-4">
         <div className="flex justify-between text-gray-700">
-          <span>Subtotal ({summary.itemCount} items)</span>
-          <span className="font-medium">{formatPrice(summary.subtotal)}</span>
+          <span>Subtotal ({itemCount} items)</span>
+          <span className="font-medium">{formatPrice(subtotal)}</span>
         </div>
 
         {/* Descuento por Cupón */}
-        {hasCoupon && summary.discount > 0 && (
+        {hasCoupon && discount > 0 && (
           <div className="flex justify-between text-green-600">
             <span className="flex items-center gap-2">
               Descuento
               <span className="text-xs bg-green-50 px-2 py-1 rounded font-medium">
-                {cart.coupon.code}
+                {coupon?.code}
               </span>
             </span>
             <span className="font-medium">
-              {formatDiscount(cart.coupon)}
+              {formatDiscount(coupon)}
             </span>
           </div>
         )}
 
         {/* Envío */}
         <div className="flex justify-between text-gray-700">
-  <span>Envío</span>
-  {summary.subtotal >= 150000 ? (
-    <span className="font-bold text-green-600">¡GRATIS!</span>
-  ) : (
-    <span className="font-medium">{formatPrice(summary.shipping)}</span>
-  )}
-</div>
+          <span>Envío</span>
+          {subtotal >= 150000 ? (
+            <span className="font-bold text-green-600">¡GRATIS!</span>
+          ) : (
+            <span className="font-medium">{formatPrice(shipping)}</span>
+          )}
+        </div>
 
         {/* Impuestos */}
-        {summary.tax > 0 && (
+        {tax > 0 && (
           <div className="flex justify-between text-gray-700">
-            <span>Impuestos ({cart.taxRate}%)</span>
-            <span className="font-medium">{formatPrice(summary.tax)}</span>
+            <span>Impuestos ({cart?.taxRate || 0}%)</span>
+            <span className="font-medium">{formatPrice(tax)}</span>
           </div>
         )}
       </div>
@@ -86,7 +104,7 @@ const CartSummary = ({
             <div
               className="bg-blue-600 h-2 rounded-full transition-all"
               style={{
-                width: `${Math.min(100, (summary.subtotal / CART_THRESHOLDS.MIN_FREE_SHIPPING) * 100)}%`
+                width: `${Math.min(100, (subtotal / CART_THRESHOLDS.MIN_FREE_SHIPPING) * 100)}%`,
               }}
             />
           </div>
@@ -94,27 +112,27 @@ const CartSummary = ({
       )}
 
       {/* Total Savings */}
-      {summary.savings > 0 && (
+      {savings > 0 && (
         <div className="mb-4 p-3 bg-green-50 rounded-lg">
           <div className="flex justify-between items-center">
             <span className="text-sm text-green-800 font-medium">
               Total en Ahorros
             </span>
             <span className="text-lg font-bold text-green-600">
-              {formatPrice(summary.savings)}
+              {formatPrice(savings)}
             </span>
           </div>
         </div>
       )}
 
       {/* Divider */}
-      <div className="border-t border-gray-200 my-4"></div>
+      <div className="border-t border-gray-200 my-4" />
 
       {/* Total */}
       <div className="flex justify-between items-center mb-6">
         <span className="text-xl font-bold text-gray-900">Total</span>
         <span className="text-2xl font-bold text-gray-900">
-          {formatPrice(summary.total)}
+          {formatPrice(total)}
         </span>
       </div>
 
@@ -122,12 +140,12 @@ const CartSummary = ({
       {showCheckoutButton && (
         <button
           onClick={onCheckout}
-          disabled={loading || summary.itemCount === 0}
+          disabled={isLoading || isEmpty}
           className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
-          {loading ? (
+          {isLoading ? (
             <span className="flex items-center justify-center gap-2">
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               Procesando...
             </span>
           ) : (
