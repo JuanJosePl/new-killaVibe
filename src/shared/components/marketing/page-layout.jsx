@@ -1,6 +1,6 @@
 
-import { CartProvider } from "../../../../modules/cart/context/CartContext.jsx"
-import { AuthProvider } from "../../../../core/providers/AuthProvider.jsx"
+import { CartProvider } from "../../../modules/cart/context/CartContext.jsx"
+import { AuthProvider } from "../../../core/providers/AuthProvider.jsx"
 
 export function PageLayout({ children }) {
   return (

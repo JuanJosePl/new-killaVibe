@@ -1,8 +1,8 @@
 // components/TestimonialsSection.jsx
 import { useState, useEffect } from "react";
 import { Star, Quote, ChevronLeft, ChevronRight, Sparkles, Heart, Award } from "lucide-react";
-import { Card, CardContent } from "../../ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "../../ui/avatar";
+import { Card, CardContent } from "../ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 const testimonials = [
   {
