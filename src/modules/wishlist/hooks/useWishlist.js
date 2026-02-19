@@ -1,136 +1,168 @@
-// src/modules/wishlist/hooks/useWishlist.js
-import { useMemo } from 'react';
-import { useWishlistContext } from '../context/WishlistContext';
-import {
-  getAvailableItems,
-  getUnavailableItems,
-  getItemsWithPriceChange,
-  getItemsWithPriceDrop,
-  generateWishlistSummary,
-  sortByDateAdded,
-  sortByPriceDrop,
-  isProductInWishlist, 
-} from '../utils/wishlistHelpers';
-
 /**
  * @hook useWishlist
- * @description Hook principal para acceder a wishlist con datos calculados
- * 
- * ✅ AGREGADO: isInWishlist(productId) para verificar si producto está en wishlist
- * 
- * @returns {Object} Wishlist state y helpers
+ * @description Hook de solo lectura. Expone el estado de la wishlist con valores derivados.
+ *
+ * REEMPLAZA:
+ * - useWishlist.js (anterior) — que mezclaba lectura y lógica de memos pesados
+ * - Las partes de lectura de useWishlistOperations.js
+ *
+ * PRINCIPIO: Este hook solo lee. No despacha acciones.
+ * Para acciones, usar useWishlistActions.
+ *
+ * PERFORMANCE:
+ * Cada selector es atómico — el componente solo re-renderiza cuando
+ * cambia exactamente el dato que consume, no todo el store.
+ *
+ * @example
+ * const { items, isInWishlist, isEmpty, loading } = useWishlist();
+ * const inList = isInWishlist('507f1f77bcf86cd799439011');
  */
+
+import { useMemo } from 'react';
+import { useWishlistStore, wishlistSelectors } from '../store/wishlist.store';
+import { WishlistMode, SyncStatus } from '../domain/wishlist.model';
+
 const useWishlist = () => {
-  const {
-    wishlist,
-    loading,
-    error,
-    initialized,
-    isEmpty,
-    itemCount,
-    fetchWishlist,
-    refreshWishlist,
-    clearCache,
-    setError,
-  } = useWishlistContext();
-
-  /**
-   * Items disponibles (en stock, publicados)
-   */
-  const availableItems = useMemo(() => {
-    return getAvailableItems(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items no disponibles
-   */
-  const unavailableItems = useMemo(() => {
-    return getUnavailableItems(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items con cambio de precio
-   */
-  const itemsWithPriceChange = useMemo(() => {
-    return getItemsWithPriceChange(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items con precio reducido
-   */
-  const itemsWithPriceDrop = useMemo(() => {
-    return getItemsWithPriceDrop(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Items ordenados por fecha (más reciente primero)
-   */
-  const itemsByDate = useMemo(() => {
-    return sortByDateAdded(wishlist?.items || []);
-  }, [wishlist]);
-
-  /**
-   * Items ordenados por mayor descuento
-   */
-  const itemsByPriceDrop = useMemo(() => {
-    return sortByPriceDrop(wishlist?.items || []);
-  }, [wishlist]);
-
-  /**
-   * Resumen completo de la wishlist
-   */
-  const summary = useMemo(() => {
-    return generateWishlistSummary(wishlist);
-  }, [wishlist]);
-
-  /**
-   * Todos los items (sin filtros)
-   */
-  const items = useMemo(() => {
-    return wishlist?.items || [];
-  }, [wishlist]);
-
-  /**
-   * Tiene items con cambios de precio?
-   */
-  const hasPriceChanges = useMemo(() => {
-    return itemsWithPriceChange.length > 0;
-  }, [itemsWithPriceChange]);
-
-  /**
-   * Tiene items con descuentos?
-   */
-  const hasPriceDrops = useMemo(() => {
-    return itemsWithPriceDrop.length > 0;
-  }, [itemsWithPriceDrop]);
-
-  /**
-   * Tiene items no disponibles?
-   */
-  const hasUnavailableItems = useMemo(() => {
-    return unavailableItems.length > 0;
-  }, [unavailableItems]);
 
   // ============================================================================
-  // ✅ NUEVO: VERIFICAR SI PRODUCTO ESTÃ EN WISHLIST
+  // ESTADO BASE (selectores atómicos — mínimo re-render)
+  // ============================================================================
+
+  const wishlist      = useWishlistStore(wishlistSelectors.wishlist);
+  const loading       = useWishlistStore(wishlistSelectors.loading);
+  const error         = useWishlistStore(wishlistSelectors.error);
+  const initialized   = useWishlistStore(wishlistSelectors.initialized);
+  const mode          = useWishlistStore(wishlistSelectors.mode);
+  const syncStatus    = useWishlistStore(wishlistSelectors.syncStatus);
+  const syncResult    = useWishlistStore(wishlistSelectors.syncResult);
+
+  const items = wishlist.items;
+
+  // ============================================================================
+  // VERIFICADOR DE WISHLIST (resuelto localmente, sin llamada a API)
   // ============================================================================
 
   /**
-   * Verifica si un producto está en la wishlist
-   * @param {string} productId - ID del producto
+   * Verifica si un producto está en la wishlist.
+   *
+   * IMPORTANTE: Se calcula localmente sobre el estado del store.
+   * El endpoint GET /wishlist/check/:productId solo se usa como validación
+   * server-side si se necesita (disponible en useWishlistActions).
+   *
+   * El useMemo retorna una función estable que solo se recrea cuando
+   * cambia el array de items — no en cada render.
+   *
+   * @param {string} productId
    * @returns {boolean}
    */
   const isInWishlist = useMemo(() => {
     return (productId) => {
-      if (!productId || !wishlist?.items) return false;
-      
-      return wishlist.items.some(item => {
-        // Buscamos el ID en cualquier profundidad
-        const idEnLista = item.product?._id || item.product?.id || item.productId || item._id || item.id;
-        return String(idEnLista) === String(productId);
-      });
+      if (!productId || !items?.length) return false;
+      return items.some(
+        item => item.productId === String(productId)
+      );
     };
-  }, [wishlist]);
+  }, [items]);
+
+  // ============================================================================
+  // ARRAYS FILTRADOS
+  // ============================================================================
+
+  const availableItems = useMemo(
+    () => items.filter(item => item.isAvailable === true),
+    [items]
+  );
+
+  const unavailableItems = useMemo(
+    () => items.filter(item => item.isAvailable === false),
+    [items]
+  );
+
+  const itemsWithPriceChange = useMemo(
+    () => items.filter(item => item.priceChanged === true),
+    [items]
+  );
+
+  const itemsWithPriceDrop = useMemo(
+    () => items.filter(item => item.priceDropped === true),
+    [items]
+  );
+
+  // ============================================================================
+  // ARRAYS ORDENADOS
+  // ============================================================================
+
+  /**
+   * Items ordenados por fecha (más reciente primero).
+   * Crea una copia para no mutar el estado del store.
+   */
+  const itemsByDate = useMemo(
+    () => [...items].sort(
+      (a, b) => new Date(b.addedAt) - new Date(a.addedAt)
+    ),
+    [items]
+  );
+
+  /**
+   * Items ordenados por mayor descuento primero.
+   */
+  const itemsByPriceDrop = useMemo(
+    () => [...items].sort(
+      (a, b) => (Number(a.priceDifference) || 0) - (Number(b.priceDifference) || 0)
+    ),
+    [items]
+  );
+
+  // ============================================================================
+  // BOOLEANOS DERIVADOS
+  // ============================================================================
+
+  const isEmpty             = items.length === 0;
+  const isGuestMode         = mode === WishlistMode.GUEST;
+  const isAuthMode          = mode === WishlistMode.AUTHENTICATED;
+  const isSyncing           = syncStatus === SyncStatus.IN_PROGRESS;
+  const hasPriceChanges     = itemsWithPriceChange.length > 0;
+  const hasPriceDrops       = itemsWithPriceDrop.length > 0;
+  const hasUnavailableItems = unavailableItems.length > 0;
+
+  // ============================================================================
+  // LOADING HELPERS
+  // ============================================================================
+
+  /**
+   * Verifica si un item específico tiene una operación en curso.
+   * Permite mostrar spinner por botón sin bloquear toda la lista.
+   *
+   * @param {string} productId
+   * @returns {boolean}
+   */
+  const isItemLoading = useMemo(() => {
+    return (productId) => loading.items.has(String(productId));
+  }, [loading.items]);
+
+  // ============================================================================
+  // RESUMEN PARA ANALYTICS / UI HEADER
+  // ============================================================================
+
+  const summary = useMemo(() => ({
+    itemCount:        items.length,
+    availableCount:   availableItems.length,
+    unavailableCount: unavailableItems.length,
+    priceChangesCount: itemsWithPriceChange.length,
+    priceDropsCount:  itemsWithPriceDrop.length,
+    isEmpty,
+  }), [
+    items.length,
+    availableItems.length,
+    unavailableItems.length,
+    itemsWithPriceChange.length,
+    itemsWithPriceDrop.length,
+    isEmpty,
+  ]);
+
+  // ============================================================================
+  // RETURN
+  // ============================================================================
 
   return {
     // Estado base
@@ -138,8 +170,11 @@ const useWishlist = () => {
     loading,
     error,
     initialized,
+    mode,
+    syncStatus,
+    syncResult,
 
-    // Arrays de items
+    // Arrays
     items,
     availableItems,
     unavailableItems,
@@ -148,30 +183,28 @@ const useWishlist = () => {
     itemsByDate,
     itemsByPriceDrop,
 
-    // Helpers booleanos
+    // Booleanos
     isEmpty,
+    isGuestMode,
+    isAuthMode,
+    isSyncing,
     hasPriceChanges,
     hasPriceDrops,
     hasUnavailableItems,
 
     // Counts
-    itemCount,
-    availableCount: availableItems.length,
+    itemCount:        items.length,
+    availableCount:   availableItems.length,
     unavailableCount: unavailableItems.length,
     priceChangesCount: itemsWithPriceChange.length,
-    priceDropsCount: itemsWithPriceDrop.length,
+    priceDropsCount:  itemsWithPriceDrop.length,
+
+    // Funciones
+    isInWishlist,
+    isItemLoading,
 
     // Resumen
     summary,
-
-    // ✅ AGREGADO: Verificador de wishlist
-    isInWishlist,
-
-    // Acciones
-    fetchWishlist,
-    refreshWishlist,
-    clearCache,
-    setError,
   };
 };
 

@@ -1,198 +1,212 @@
-// wishlist/hooks/useWishlistActions.js
+/**
+ * @hook useWishlistActions
+ * @description Hook de solo escritura. Expone acciones con feedback UI integrado.
+ *
+ * PRINCIPIO: Este hook solo escribe. Para leer estado, usar useWishlist.
+ *
+ * PATRÓN DE CALLBACKS:
+ * onSuccess(message: string) — para toasts de éxito, puede ser null
+ * onError(message: string, err?: WishlistError) — para toasts de error, puede ser null
+ *
+ * @param {Function} [onSuccess]
+ * @param {Function} [onError]
+ */
 
-import { useState, useCallback } from "react";
-import { useWishlistContext } from "../context/WishlistContext";
+import { useCallback } from "react";
+import { useWishlistStore } from "../store/wishlist.store";
 import {
   validateAddItem,
   validateMoveToCart,
-  getValidationErrors,
-} from "../schemas/wishlist.schema";
+} from "../domain/wishlist.validators";
+import { WishlistValidationError } from "../domain/wishlist.errors";
 
-/**
- * @hook useWishlistActions
- * @description Hook para acciones de wishlist (UI + sistema)
- * 
- * 🆕 MEJORADO:
- * - Loading state unificado
- * - Error handling consistente con Cart
- */
-const useWishlistActions = (onSuccess, onError) => {
-  const {
-    addItem: contextAddItem,
-    removeItem: contextRemoveItem,
-    clearWishlistItems: contextClearWishlist,
-    moveToCart: contextMoveToCart,
-    checkProduct: contextCheckProduct,
-    getPriceChanges: contextGetPriceChanges,
-    migrateGuestWishlistToUser,
-    clearGuestWishlist,
-    loading: contextLoading,
-    error: contextError,
-  } = useWishlistContext();
-
-  const [actionError, setActionError] = useState(null);
-
-  const clearError = useCallback(() => {
-    setActionError(null);
-  }, []);
-
+const useWishlistActions = (onSuccess = null, onError = null) => {
   // ============================================================================
-  // HELPER: EJECUTAR ACCIÓN
+  // SELECTORES ATÓMICOS (ESTABLES - NO OBJETOS COMPUESTOS)
   // ============================================================================
 
-  const executeAction = useCallback(
-    async (action, successMessage) => {
-      try {
-        setActionError(null);
-        const result = await action();
+  const addItem = useWishlistStore((state) => state.addItem);
+  const removeItem = useWishlistStore((state) => state.removeItem);
+  const clearWishlistStore = useWishlistStore((state) => state.clearWishlist);
+  const moveToCart = useWishlistStore((state) => state.moveToCart);
+  const getPriceChangesStore = useWishlistStore(
+    (state) => state.getPriceChanges
+  );
+  const clearErrorStore = useWishlistStore((state) => state.clearError);
+  const refreshWishlist = useWishlistStore(
+    (state) => state.refreshWishlist
+  );
 
-        if (onSuccess && successMessage) {
+  // Para toggle
+  const items = useWishlistStore((state) => state.items);
+
+  // ============================================================================
+  // HELPER: EJECUTAR CON FEEDBACK
+  // ============================================================================
+
+  const withFeedback = useCallback(
+    async (action, successMessage = null) => {
+      const result = await action();
+
+      if (result?.success) {
+        if (successMessage && onSuccess) {
           onSuccess(successMessage);
         }
-
-        return result;
-      } catch (err) {
-        const errorMessage =
-          err.response?.data?.message ||
-          err.message ||
-          "Error al realizar la acción";
-
-        setActionError(errorMessage);
-
-        if (onError) {
-          onError(errorMessage, err);
+      } else {
+        if (onError && result?.error) {
+          onError(result.error);
         }
-
-        throw err;
       }
+
+      return result;
     },
     [onSuccess, onError]
   );
 
   // ============================================================================
-  // UI ACTIONS
+  // CORE
   // ============================================================================
 
   const addToWishlist = useCallback(
     async (itemData) => {
-      try {
-        const validatedData = await validateAddItem(itemData);
-        
-        return await executeAction(
-          () => contextAddItem(validatedData),
-          "Producto agregado a tu lista de deseos"
-        );
-      } catch (err) {
-        if (err.name === "ValidationError") {
-          const errorMsg = getValidationErrors(err)[0] || "Error de validación";
-          setActionError(errorMsg);
-          if (onError) {
-            onError(errorMsg, err);
-          }
-        }
-        throw err;
+      const validation = validateAddItem(itemData);
+
+      if (!validation.valid) {
+        const err = new WishlistValidationError(validation.errors);
+        if (onError) onError(err.userMessage, err);
+        return { success: false, error: err.userMessage };
       }
+
+      const result = await withFeedback(
+        () => addItem(itemData),
+        "Producto agregado a tu lista de deseos"
+      );
+
+      if (result?.isDuplicate && onSuccess) {
+        onSuccess("El producto ya estaba en tu lista de deseos");
+      }
+
+      return result;
     },
-    [contextAddItem, executeAction, onError]
+    [addItem, withFeedback, onSuccess, onError]
   );
 
   const removeFromWishlist = useCallback(
     async (productId) => {
-      return await executeAction(
-        () => contextRemoveItem(productId),
+      return withFeedback(
+        () => removeItem(productId),
         "Producto eliminado de tu lista de deseos"
       );
     },
-    [contextRemoveItem, executeAction]
+    [removeItem, withFeedback]
+  );
+
+  const toggleWishlist = useCallback(
+    async (productId, addOptions = {}) => {
+      const isInList = items.some(
+        (item) => item.productId === String(productId)
+      );
+
+      if (isInList) {
+        const result = await removeFromWishlist(productId);
+        return { ...result, action: "removed" };
+      } else {
+        const result = await addToWishlist({
+          productId,
+          ...addOptions,
+        });
+        return { ...result, action: "added" };
+      }
+    },
+    [items, addToWishlist, removeFromWishlist]
   );
 
   const clearWishlist = useCallback(async () => {
-    return await executeAction(
-      () => contextClearWishlist(),
+    return withFeedback(
+      () => clearWishlistStore(),
       "Lista de deseos vaciada"
     );
-  }, [contextClearWishlist, executeAction]);
+  }, [clearWishlistStore, withFeedback]);
 
-  const moveToCart = useCallback(
+  // ============================================================================
+  // CARRITO
+  // ============================================================================
+
+  const moveItemToCart = useCallback(
+    async (productId) => {
+      return withFeedback(
+        () => moveToCart([productId]),
+        "✓ Producto agregado al carrito"
+      );
+    },
+    [moveToCart, withFeedback]
+  );
+
+  const moveMultipleToCart = useCallback(
     async (productIds) => {
-      try {
-        await validateMoveToCart(productIds);
-        
-        const result = await executeAction(
-          () => contextMoveToCart(productIds),
-          null // No message aquí, se setea después
-        );
+      const validation = validateMoveToCart(productIds);
 
+      if (!validation.valid) {
+        const err = new WishlistValidationError(validation.errors);
+        if (onError) onError(err.userMessage, err);
+        return { success: false, error: err.userMessage };
+      }
+
+      const result = await moveToCart(productIds);
+
+      if (result?.success) {
         const count = result.movedCount || 0;
-        const msg = `${count} producto${count !== 1 ? "s" : ""} movido${
+        const msg = `✓ ${count} producto${count !== 1 ? "s" : ""} movido${
           count !== 1 ? "s" : ""
         } al carrito`;
 
-        if (onSuccess) {
-          onSuccess(msg);
-        }
-
-        return result;
-      } catch (err) {
-        if (err.name === "ValidationError") {
-          const errorMsg = getValidationErrors(err)[0] || "Error de validación";
-          setActionError(errorMsg);
-          if (onError) {
-            onError(errorMsg, err);
-          }
-        }
-        throw err;
+        if (onSuccess) onSuccess(msg);
+      } else {
+        if (onError) onError(result?.error);
       }
+
+      return result;
     },
-    [contextMoveToCart, executeAction, onSuccess, onError]
+    [moveToCart, onSuccess, onError]
   );
 
-  const checkProduct = useCallback(
-    async (productId) => {
-      try {
-        return await contextCheckProduct(productId);
-      } catch {
-        return false;
-      }
-    },
-    [contextCheckProduct]
-  );
+  // ============================================================================
+  // PRICE CHANGES
+  // ============================================================================
 
   const getPriceChanges = useCallback(async () => {
-    try {
-      setActionError(null);
-      return await contextGetPriceChanges();
-    } catch (err) {
-      const errorMsg = err.response?.data?.message || "Error al obtener cambios de precio";
-      setActionError(errorMsg);
-      if (onError) {
-        onError(errorMsg, err);
-      }
-      throw err;
-    }
-  }, [contextGetPriceChanges, onError]);
+    return getPriceChangesStore();
+  }, [getPriceChangesStore]);
+
+  // ============================================================================
+  // UTILIDADES
+  // ============================================================================
+
+  const clearError = useCallback(() => {
+    clearErrorStore();
+  }, [clearErrorStore]);
 
   // ============================================================================
   // RETURN
   // ============================================================================
 
   return {
-    // UI
+    // Core
     addToWishlist,
     removeFromWishlist,
+    toggleWishlist,
     clearWishlist,
-    moveToCart,
-    checkProduct,
+
+    // Carrito
+    moveItemToCart,
+    moveMultipleToCart,
+
+    // Datos
     getPriceChanges,
 
-    // 🔥 Sync (alias limpio para syncManager)
-    syncGuestWishlistToUser: migrateGuestWishlistToUser,
-    clearGuestWishlist,
-
-    // State (unificado)
-    loading: contextLoading,
-    error: actionError || contextError,
+    // Utilidades
     clearError,
+    refreshWishlist,
   };
 };
 

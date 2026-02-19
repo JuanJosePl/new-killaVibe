@@ -1,13 +1,26 @@
-// wishlist/components/WishlistGrid.jsx
-import React from "react";
-import WishlistItem from "./WishlistItem";
-import WishlistEmptyState from "./WishlistEmptyState";
+import React from 'react';
+import WishlistItem from './WishlistItem';
+import WishlistEmptyState from './WishlistEmptyState';
 
+/**
+ * @component WishlistGrid
+ * @description Componente puramente presentacional.
+ * Renderiza la lista de WishlistItems o el estado vacío.
+ * No accede al store ni a hooks de wishlist.
+ *
+ * @param {Object[]}  items            - Items canónicos del dominio (WishlistItem[])
+ * @param {Function}  onRemoveItem     - (productId: string) => void
+ * @param {Function}  onMoveToCart     - (productId: string) => void
+ * @param {string[]}  selectedItems    - IDs de items seleccionados para bulk actions
+ * @param {Function}  onToggleSelect   - (productId: string) => void
+ * @param {Object}    emptyState       - Props para WishlistEmptyState
+ */
 const WishlistGrid = ({
   items = [],
   onRemoveItem,
   onMoveToCart,
-  loading = false,
+  selectedItems = [],
+  onToggleSelect,
   emptyState,
 }) => {
   if (!items || items.length === 0) {
@@ -17,22 +30,20 @@ const WishlistGrid = ({
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {items.map((item, index) => {
-        // Obtenemos el ID real para la key y las acciones
-        const productData = item?.product || item;
-        const safeId = productData?._id || productData?.id || item?.productId;
+        const productId = item.productId;
 
-        // Si no hay ID válido, usar índice como fallback (pero loguear advertencia)
-        if (!safeId) {
-          console.warn('[WishlistGrid] Item sin ID válido:', item);
+        if (!productId) {
+          return null;
         }
 
         return (
           <WishlistItem
-            key={safeId || `wishlist-item-${index}`}
+            key={productId || `wishlist-item-${index}`}
             item={item}
-            onRemove={onRemoveItem ? () => onRemoveItem(safeId) : undefined}
-            onMoveToCart={onMoveToCart ? () => onMoveToCart(safeId) : undefined}
-            loading={loading}
+            isSelected={selectedItems.includes(productId)}
+            onRemove={onRemoveItem ? () => onRemoveItem(productId) : undefined}
+            onMoveToCart={onMoveToCart ? () => onMoveToCart(productId) : undefined}
+            onToggleSelect={onToggleSelect ? () => onToggleSelect(productId) : undefined}
           />
         );
       })}
