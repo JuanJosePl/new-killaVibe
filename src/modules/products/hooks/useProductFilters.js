@@ -1,147 +1,138 @@
-import { useState, useCallback, useEffect } from 'react';
+/**
+ * @hook useProductFilters
+ * @description Gestiona el estado de filtros con sincronización a URL.
+ *
+ * RESPONSABILIDAD: solo filtros y URL sync.
+ * No hace fetch. No conoce productos.
+ * Se usa en composición con useProductList.
+ *
+ * USO:
+ *   const { filters, updateFilter, resetFilters } = useProductFilters();
+ *   useEffect(() => { list.reload(filters); }, [filters]);
+ */
+
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_QUERY_PARAMS } from '../types/product.types';
 
 /**
- * @hook useProductFilters
- * @description Hook para manejo de filtros de productos con sincronización URL
- * @returns {Object} { filters, updateFilter, clearFilters, resetFilters }
- * 
- * ✅ FIX APLICADO:
- * - Removida dependencia setSearchParams del useEffect para evitar re-renders innecesarios
+ * @param {Object} [initialFilters={}] - Filtros iniciales (se mezclan con DEFAULT_QUERY_PARAMS)
+ * @returns {Object}
  */
 export const useProductFilters = (initialFilters = {}) => {
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
+  // Inicializar desde URL si existen params
   const [filters, setFilters] = useState(() => {
-    // Inicializar desde URL params si existen
     const urlFilters = {};
-    
     for (const [key, value] of searchParams.entries()) {
       urlFilters[key] = value;
     }
-    
-    return {
-      ...DEFAULT_QUERY_PARAMS,
-      ...initialFilters,
-      ...urlFilters
-    };
+    return { ...DEFAULT_QUERY_PARAMS, ...initialFilters, ...urlFilters };
   });
 
-  /**
-   * Actualiza un filtro específico
-   */
-  const updateFilter = useCallback((key, value) => {
-    setFilters(prev => {
-      const newFilters = {
-        ...prev,
-        [key]: value
-      };
-      
-      // Si cambia algún filtro (excepto page), resetear página a 1
-      if (key !== 'page') {
-        newFilters.page = 1;
-      }
-      
-      return newFilters;
-    });
-  }, []);
+  // Ref para comparar si los filtros realmente cambiaron (evitar sync innecesario)
+  const prevFiltersRef = useRef(null);
 
   /**
-   * Actualiza múltiples filtros a la vez
+   * Actualiza un filtro individual.
+   * Resetea page a 1 si no es el campo page.
    */
-  const updateFilters = useCallback((newFilters) => {
-    setFilters(prev => ({
+  const updateFilter = useCallback((key, value) => {
+    setFilters((prev) => ({
       ...prev,
-      ...newFilters,
-      page: newFilters.page !== undefined ? newFilters.page : 1
+      [key]: value,
+      page: key !== 'page' ? 1 : (value ?? 1),
     }));
   }, []);
 
   /**
-   * Limpia todos los filtros excepto los básicos
+   * Actualiza múltiples filtros a la vez.
    */
-  const clearFilters = useCallback(() => {
-    setFilters(DEFAULT_QUERY_PARAMS);
+  const updateFilters = useCallback((newFilters) => {
+    setFilters((prev) => ({
+      ...prev,
+      ...newFilters,
+      page: newFilters.page !== undefined ? newFilters.page : 1,
+    }));
   }, []);
 
   /**
-   * Resetea a filtros iniciales
+   * Limpia todos los filtros y vuelve a los defaults.
    */
   const resetFilters = useCallback(() => {
-    setFilters({
-      ...DEFAULT_QUERY_PARAMS,
-      ...initialFilters
-    });
+    setFilters({ ...DEFAULT_QUERY_PARAMS, ...initialFilters });
   }, [initialFilters]);
 
   /**
-   * ✅ FIX: Sincroniza filtros con URL sin causar re-renders
-   * Removida dependencia setSearchParams
+   * Elimina un filtro específico (lo pone en undefined).
+   */
+  const clearFilter = useCallback((key) => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return { ...DEFAULT_QUERY_PARAMS, ...next, page: 1 };
+    });
+  }, []);
+
+  /**
+   * Sincroniza filtros con URL (solo cuando cambian realmente).
+   * No incluye setSearchParams en deps para evitar loop.
    */
   useEffect(() => {
+    const serialized = JSON.stringify(filters);
+    if (prevFiltersRef.current === serialized) return;
+    prevFiltersRef.current = serialized;
+
     const params = new URLSearchParams();
-    
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        params.set(key, value.toString());
+        params.set(key, String(value));
       }
     });
-    
+
     setSearchParams(params, { replace: true });
-  }, [filters]); // ✅ Solo filters como dependencia
+  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     filters,
     updateFilter,
     updateFilters,
-    clearFilters,
-    resetFilters
+    resetFilters,
+    clearFilter,
   };
 };
 
+// ─────────────────────────────────────────────
+// HOOKS AUXILIARES
+// ─────────────────────────────────────────────
+
 /**
  * @hook usePriceRange
- * @description Hook para manejo de rango de precios
- * @param {number} min
- * @param {number} max
- * @returns {Object}
+ * @description Gestiona el rango de precios con debounce.
  */
-export const usePriceRange = (min = 0, max = 300000) => {
-  const [priceRange, setPriceRange] = useState([min, max]);
+export const usePriceRange = (min = 0, max = 3_000_000, debounceMs = 500) => {
+  const [range, setRange] = useState([min, max]);
   const [debouncedRange, setDebouncedRange] = useState([min, max]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedRange(priceRange);
-    }, 500);
-
+    const timer = setTimeout(() => setDebouncedRange(range), debounceMs);
     return () => clearTimeout(timer);
-  }, [priceRange]);
+  }, [range, debounceMs]);
 
-  const updateRange = useCallback((newRange) => {
-    setPriceRange(newRange);
-  }, []);
+  const updateRange = useCallback((newRange) => setRange(newRange), []);
 
   const resetRange = useCallback(() => {
-    setPriceRange([min, max]);
+    setRange([min, max]);
     setDebouncedRange([min, max]);
   }, [min, max]);
 
-  return {
-    priceRange,
-    debouncedRange,
-    updateRange,
-    resetRange
-  };
+  return { range, debouncedRange, updateRange, resetRange };
 };
 
 /**
  * @hook useProductSort
- * @description Hook para manejo de ordenamiento
- * @param {string} defaultSort
- * @param {string} defaultOrder
- * @returns {Object}
+ * @description Gestiona el ordenamiento con cambio automático de dirección.
  */
 export const useProductSort = (defaultSort = 'createdAt', defaultOrder = 'desc') => {
   const [sort, setSort] = useState(defaultSort);
@@ -149,17 +140,11 @@ export const useProductSort = (defaultSort = 'createdAt', defaultOrder = 'desc')
 
   const updateSort = useCallback((newSort) => {
     setSort(newSort);
-    
-    // Cambiar orden automáticamente para ciertos campos
-    if (newSort === 'price' || newSort === 'name') {
-      setOrder('asc');
-    } else {
-      setOrder('desc');
-    }
+    setOrder(newSort === 'price' || newSort === 'name' ? 'asc' : 'desc');
   }, []);
 
   const toggleOrder = useCallback(() => {
-    setOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+    setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
   }, []);
 
   const resetSort = useCallback(() => {
@@ -167,72 +152,24 @@ export const useProductSort = (defaultSort = 'createdAt', defaultOrder = 'desc')
     setOrder(defaultOrder);
   }, [defaultSort, defaultOrder]);
 
-  return {
-    sort,
-    order,
-    updateSort,
-    toggleOrder,
-    resetSort
-  };
+  return { sort, order, updateSort, toggleOrder, resetSort };
 };
 
 /**
- * @hook useCategoryFilter
- * @description Hook para manejo de filtros de categoría
- * @returns {Object}
+ * @hook useActiveFilterCount
+ * @description Cuenta cuántos filtros no-default están activos.
  */
-export const useCategoryFilter = () => {
-  const [selectedCategories, setSelectedCategories] = useState([]);
-
-  const toggleCategory = useCallback((categoryId) => {
-    setSelectedCategories(prev => {
-      if (prev.includes(categoryId)) {
-        return prev.filter(id => id !== categoryId);
-      } else {
-        return [...prev, categoryId];
-      }
-    });
-  }, []);
-
-  const clearCategories = useCallback(() => {
-    setSelectedCategories([]);
-  }, []);
-
-  const isSelected = useCallback((categoryId) => {
-    return selectedCategories.includes(categoryId);
-  }, [selectedCategories]);
-
-  return {
-    selectedCategories,
-    toggleCategory,
-    clearCategories,
-    isSelected
-  };
-};
-
-/**
- * @hook useFilterCount
- * @description Hook para contar filtros activos
- * @param {Object} filters
- * @returns {number}
- */
-export const useFilterCount = (filters) => {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    let activeCount = 0;
-    
-    // Contar solo filtros que no son defaults
-    if (filters.category) activeCount++;
-    if (filters.search) activeCount++;
-    if (filters.minPrice && filters.minPrice > 0) activeCount++;
-    if (filters.maxPrice && filters.maxPrice < 300000) activeCount++;
-    if (filters.featured) activeCount++;
-    if (filters.inStock) activeCount++;
-    if (filters.brand) activeCount++;
-    
-    setCount(activeCount);
-  }, [filters]);
+export const useActiveFilterCount = (filters) => {
+  const count =
+    (filters.category ? 1 : 0) +
+    (filters.search ? 1 : 0) +
+    (filters.minPrice && filters.minPrice > 0 ? 1 : 0) +
+    (filters.maxPrice ? 1 : 0) +
+    (filters.featured ? 1 : 0) +
+    (filters.inStock ? 1 : 0) +
+    (filters.brand ? 1 : 0);
 
   return count;
 };
+
+export default useProductFilters;

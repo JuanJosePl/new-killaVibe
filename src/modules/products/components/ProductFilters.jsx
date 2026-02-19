@@ -7,28 +7,52 @@ import {
   Tag,
   Package,
   Star,
-  Check,
   Filter,
 } from "lucide-react";
+
+// ✅ MIGRADO: Hooks del módulo Products
 import {
   useProductFilters,
   usePriceRange,
-  useCategoryFilter,
-} from "../hooks/useProductFilters";
-import { formatPrice } from "../utils/priceHelpers";
+  formatCOP,
+} from "@/modules/products";
+
+// ✅ MIGRADO: useCategoryFilter era hook local — se implementa aquí directamente
+//    (no existía en el módulo anterior; era estado local en el componente)
+import { useState as useCategoryState } from "react";
+
+/**
+ * @hook useCategoryFilter (local)
+ * @description Gestiona multi-selección de categorías.
+ * No forma parte del módulo Products porque las categorías son un dominio
+ * separado. Se mantiene aquí hasta que exista un módulo de categorías.
+ */
+function useCategoryFilter() {
+  const [selectedCategories, setSelectedCategories] = useState([]);
+
+  const toggleCategory = (categoryId) => {
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId)
+        ? prev.filter((id) => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const clearCategories = () => setSelectedCategories([]);
+  const isSelected = (categoryId) => selectedCategories.includes(categoryId);
+
+  return { selectedCategories, toggleCategory, clearCategories, isSelected };
+}
 
 /**
  * @component ProductFilters
- * @description Sidebar completo de filtros con estado real sincronizado con URL
  *
- * ✅ USA:
- * - useProductFilters() - filtros con sync URL
- * - usePriceRange() - rango de precios con debounce
- * - useCategoryFilter() - multi-select de categorías
- *
- * ✅ FILTROS DISPONIBLES DEL BACKEND:
- * - category, search, minPrice, maxPrice, status, visibility
- * - featured, inStock, brand
+ * CAMBIOS DE MIGRACIÓN:
+ * - import useProductFilters from "../hooks/useProductFilters" → @/modules/products
+ * - import usePriceRange from "../hooks/useProductFilters"    → @/modules/products
+ * - import formatPrice from "../utils/priceHelpers"           → formatCOP de @/modules/products
+ * - useCategoryFilter: era hook externo no encontrado — ahora inline arriba
+ * - clearFilters renombrado a resetFilters en el nuevo hook (interfaz actualizada)
  */
 export function ProductFilters({
   categories = [],
@@ -36,11 +60,9 @@ export function ProductFilters({
   onFiltersChange,
   className = "",
 }) {
-  const { filters, updateFilter, clearFilters } = useProductFilters();
-  const { priceRange, debouncedRange, updateRange, resetRange } = usePriceRange(
-    0,
-    5000000
-  );
+  const { filters, updateFilter, resetFilters } = useProductFilters();
+  const { range: priceRange, debouncedRange, updateRange, resetRange } =
+    usePriceRange(0, 5_000_000);
   const { selectedCategories, toggleCategory, clearCategories, isSelected } =
     useCategoryFilter();
 
@@ -48,56 +70,45 @@ export function ProductFilters({
     categories: true,
     price: true,
     brands: true,
-    availability: true,
     features: true,
   });
 
   const toggleSection = (section) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
-  // ✅ Handler para aplicar filtros
+  // ✅ Aplicar filtros
   const handleApplyFilters = () => {
     const newFilters = {
       ...filters,
       minPrice: debouncedRange[0] > 0 ? debouncedRange[0] : undefined,
-      maxPrice: debouncedRange[1] < 5000000 ? debouncedRange[1] : undefined,
+      maxPrice: debouncedRange[1] < 5_000_000 ? debouncedRange[1] : undefined,
       category:
         selectedCategories.length > 0
           ? selectedCategories.join(",")
           : undefined,
     };
-
-    if (onFiltersChange) {
-      onFiltersChange(newFilters);
-    }
+    if (onFiltersChange) onFiltersChange(newFilters);
   };
 
-  // ✅ Handler para limpiar filtros
+  // ✅ Limpiar filtros
   const handleClearFilters = () => {
-    clearFilters();
+    resetFilters(); // antes: clearFilters()
     resetRange();
     clearCategories();
-    if (onFiltersChange) {
-      onFiltersChange({});
-    }
+    if (onFiltersChange) onFiltersChange({});
   };
 
-  // ✅ Contar filtros activos
+  // Contar filtros activos
   const activeFiltersCount =
-    (debouncedRange[0] > 0 || debouncedRange[1] < 5000000 ? 1 : 0) +
+    (debouncedRange[0] > 0 || debouncedRange[1] < 5_000_000 ? 1 : 0) +
     selectedCategories.length +
     (filters.featured ? 1 : 0) +
     (filters.inStock ? 1 : 0) +
     (filters.brand ? 1 : 0);
 
   return (
-    <div
-      className={`bg-white rounded-2xl border border-gray-200 shadow-sm ${className}`}
-    >
+    <div className={`bg-white rounded-2xl border border-gray-200 shadow-sm ${className}`}>
       {/* Header */}
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
@@ -122,8 +133,8 @@ export function ProductFilters({
       </div>
 
       <div className="p-6 space-y-6">
-        {/* ✅ CATEGORÍAS */}
-        {categories && categories.length > 0 && (
+        {/* CATEGORÍAS */}
+        {categories.length > 0 && (
           <div>
             <button
               onClick={() => toggleSection("categories")}
@@ -139,7 +150,6 @@ export function ProductFilters({
                 <ChevronDown className="h-4 w-4 text-gray-600" />
               )}
             </button>
-
             {expandedSections.categories && (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {categories.map((category) => (
@@ -153,9 +163,7 @@ export function ProductFilters({
                       onChange={() => toggleCategory(category._id)}
                       className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
                     />
-                    <span className="text-sm text-gray-700 flex-1">
-                      {category.name}
-                    </span>
+                    <span className="text-sm text-gray-700 flex-1">{category.name}</span>
                     {category.productCount && (
                       <span className="text-xs text-gray-500">
                         ({category.productCount})
@@ -168,7 +176,7 @@ export function ProductFilters({
           </div>
         )}
 
-        {/* ✅ RANGO DE PRECIO */}
+        {/* RANGO DE PRECIO */}
         <div>
           <button
             onClick={() => toggleSection("price")}
@@ -184,10 +192,8 @@ export function ProductFilters({
               <ChevronDown className="h-4 w-4 text-gray-600" />
             )}
           </button>
-
           {expandedSections.price && (
             <div className="space-y-4">
-              {/* Range Slider */}
               <div className="px-2">
                 <input
                   type="range"
@@ -212,56 +218,43 @@ export function ProductFilters({
                   className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary mt-2"
                 />
               </div>
-
-              {/* Price Display */}
               <div className="flex items-center justify-between text-sm">
                 <div className="flex flex-col">
                   <span className="text-gray-500 text-xs">Desde</span>
+                  {/* ✅ formatPrice → formatCOP */}
                   <span className="font-semibold text-gray-900">
-                    {formatPrice(priceRange[0])}
+                    {formatCOP(priceRange[0])}
                   </span>
                 </div>
                 <div className="flex flex-col text-right">
                   <span className="text-gray-500 text-xs">Hasta</span>
                   <span className="font-semibold text-gray-900">
-                    {formatPrice(priceRange[1])}
+                    {formatCOP(priceRange[1])}
                   </span>
                 </div>
               </div>
-
-              {/* Quick Ranges */}
               <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => updateRange([0, 500000])}
-                  className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
-                >
-                  &lt; $500K
-                </button>
-                <button
-                  onClick={() => updateRange([500000, 1000000])}
-                  className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
-                >
-                  $500K - $1M
-                </button>
-                <button
-                  onClick={() => updateRange([1000000, 2000000])}
-                  className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
-                >
-                  $1M - $2M
-                </button>
-                <button
-                  onClick={() => updateRange([2000000, 5000000])}
-                  className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
-                >
-                  &gt; $2M
-                </button>
+                {[
+                  [0, 500_000, "< $500K"],
+                  [500_000, 1_000_000, "$500K - $1M"],
+                  [1_000_000, 2_000_000, "$1M - $2M"],
+                  [2_000_000, 5_000_000, "> $2M"],
+                ].map(([min, max, label]) => (
+                  <button
+                    key={label}
+                    onClick={() => updateRange([min, max])}
+                    className="px-3 py-2 text-xs border border-gray-300 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* ✅ MARCAS */}
-        {brands && brands.length > 0 && (
+        {/* MARCAS */}
+        {brands.length > 0 && (
           <div>
             <button
               onClick={() => toggleSection("brands")}
@@ -277,7 +270,6 @@ export function ProductFilters({
                 <ChevronDown className="h-4 w-4 text-gray-600" />
               )}
             </button>
-
             {expandedSections.brands && (
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {brands.map((brand) => (
@@ -301,7 +293,7 @@ export function ProductFilters({
           </div>
         )}
 
-        {/* ✅ DISPONIBILIDAD Y CARACTERÍSTICAS */}
+        {/* CARACTERÍSTICAS */}
         <div>
           <button
             onClick={() => toggleSection("features")}
@@ -309,9 +301,7 @@ export function ProductFilters({
           >
             <div className="flex items-center space-x-2">
               <Star className="h-4 w-4 text-gray-600" />
-              <span className="font-semibold text-gray-900">
-                Características
-              </span>
+              <span className="font-semibold text-gray-900">Características</span>
             </div>
             {expandedSections.features ? (
               <ChevronUp className="h-4 w-4 text-gray-600" />
@@ -319,10 +309,8 @@ export function ProductFilters({
               <ChevronDown className="h-4 w-4 text-gray-600" />
             )}
           </button>
-
           {expandedSections.features && (
             <div className="space-y-3">
-              {/* En stock */}
               <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
                 <input
                   type="checkbox"
@@ -332,8 +320,6 @@ export function ProductFilters({
                 />
                 <span className="text-sm text-gray-700">Solo en stock</span>
               </label>
-
-              {/* Destacados */}
               <label className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 p-2 rounded-lg transition-colors">
                 <input
                   type="checkbox"
@@ -350,7 +336,7 @@ export function ProductFilters({
           )}
         </div>
 
-        {/* ✅ Botón Aplicar Filtros */}
+        {/* Botón Aplicar */}
         <button
           onClick={handleApplyFilters}
           className="w-full bg-gradient-to-r from-primary to-accent text-white py-3 rounded-xl font-semibold hover:shadow-lg hover:shadow-primary/20 transition-all duration-300"
@@ -363,21 +349,17 @@ export function ProductFilters({
 }
 
 /**
- * @component MobileFiltersSheet
- * @description Versión móvil del sidebar de filtros
+ * @component MobileFiltersSheet — Sin cambios estructurales
  */
 export function MobileFiltersSheet({ isOpen, onClose, ...filterProps }) {
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
-      {/* Overlay */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
-      ></div>
-
-      {/* Sheet */}
+      />
       <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[85vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
           <h3 className="text-lg font-bold text-gray-900">Filtros</h3>
@@ -388,7 +370,6 @@ export function MobileFiltersSheet({ isOpen, onClose, ...filterProps }) {
             <X className="h-5 w-5 text-gray-700" />
           </button>
         </div>
-
         <ProductFilters {...filterProps} />
       </div>
     </div>

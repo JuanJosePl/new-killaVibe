@@ -1,24 +1,39 @@
-import { useRelatedProducts } from "../hooks/useProductDetails";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+// ✅ MIGRADO: useRelatedProducts viene de hooks/useProductStock ahora
+import {
+  useProductsRepository,
+  useRelatedProducts,
+} from "@/modules/products";
+
 import { ProductCard } from "./ProductCard";
-import { ChevronLeft, ChevronRight  } from "lucide-react";
-import { useRef, useState } from "react";
 
 /**
  * @component RelatedProducts
- * @description Carrusel de productos relacionados usando endpoint real
  *
- * ✅ USA:
- * - useRelatedProducts(productId, limit)
- * - Endpoint: GET /products/related/:productId
- * - Retorna ProductCardDTO[]
+ * CAMBIOS DE MIGRACIÓN:
+ * - import { useRelatedProducts } from "../hooks/useProductDetails"
+ *   → import { useRelatedProducts } from "@/modules/products"
+ *   (el hook está en hooks/useProductStock.js pero re-exportado desde index.js)
+ * - Ahora requiere repo inyectado (useProductsRepository)
+ * - El hook carga automáticamente cuando productId cambia (tiene useEffect interno)
+ *   pero necesitamos asegurarnos de que se llame a load()
  */
 export function RelatedProducts({ productId, limit = 8, className = "" }) {
-  const { products, loading, error } = useRelatedProducts(productId, limit);
+  const repo = useProductsRepository();
+  const { products, isLoading: loading, error, reload } = useRelatedProducts(repo, productId, limit);
+
   const scrollContainerRef = useRef(null);
   const [showLeftArrow, setShowLeftArrow] = useState(false);
   const [showRightArrow, setShowRightArrow] = useState(false);
 
-  // ✅ Loading State
+  // Cargar al montar o cuando cambia productId
+  useEffect(() => {
+    if (productId) reload();
+  }, [productId, reload]);
+
+  // Loading
   if (loading) {
     return (
       <div className={`py-12 ${className}`}>
@@ -28,9 +43,9 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="animate-pulse">
-              <div className="bg-gray-200 rounded-2xl h-64 mb-4"></div>
-              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="bg-gray-200 rounded-2xl h-64 mb-4" />
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+              <div className="h-4 bg-gray-200 rounded w-1/2" />
             </div>
           ))}
         </div>
@@ -38,27 +53,22 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
     );
   }
 
-  // ✅ Error State (silencioso - no bloquea la página)
+  // Error silencioso — no bloquea la página
   if (error) {
-    console.error("Error loading related products:", error);
+    console.error("[RelatedProducts] Error:", error);
     return null;
   }
 
-  // ✅ Empty State (no hay relacionados)
-  if (!products || products.length === 0) {
-    return null;
-  }
+  // Vacío
+  if (!products || products.length === 0) return null;
 
-  // Scroll handlers
   const scroll = (direction) => {
     if (scrollContainerRef.current) {
       const scrollAmount = 300;
-      const newScrollLeft =
-        scrollContainerRef.current.scrollLeft +
-        (direction === "left" ? -scrollAmount : scrollAmount);
-
       scrollContainerRef.current.scrollTo({
-        left: newScrollLeft,
+        left:
+          scrollContainerRef.current.scrollLeft +
+          (direction === "left" ? -scrollAmount : scrollAmount),
         behavior: "smooth",
       });
     }
@@ -66,8 +76,7 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
 
   const updateArrows = () => {
     if (scrollContainerRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } =
-        scrollContainerRef.current;
+      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
       setShowLeftArrow(scrollLeft > 0);
       setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
     }
@@ -84,7 +93,6 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
             <button
               onClick={() => scroll("left")}
               className="w-10 h-10 rounded-full bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
-              aria-label="Scroll izquierda"
             >
               <ChevronLeft className="h-5 w-5 text-gray-700" />
             </button>
@@ -93,7 +101,6 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
             <button
               onClick={() => scroll("right")}
               className="w-10 h-10 rounded-full bg-white border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
-              aria-label="Scroll derecha"
             >
               <ChevronRight className="h-5 w-5 text-gray-700" />
             </button>
@@ -101,22 +108,19 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
         </div>
       </div>
 
-      {/* ✅ Carrusel Horizontal */}
       <div className="relative">
         <div
           ref={scrollContainerRef}
           className="flex space-x-4 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
           onScroll={updateArrows}
-          onLoad={updateArrows}
         >
           {products.map((product) => (
             <div key={product._id} className="flex-shrink-0 w-64 sm:w-72">
-              <ProductCard product={product} showWishlistButton={true} />
+              <ProductCard product={product} showWishlistButton />
             </div>
           ))}
         </div>
 
-        {/* Gradient Overlays */}
         {showLeftArrow && (
           <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-gray-50 to-transparent pointer-events-none" />
         )}
@@ -125,25 +129,20 @@ export function RelatedProducts({ productId, limit = 8, className = "" }) {
         )}
       </div>
 
-      {/* Mobile: Grid alternativo */}
+      {/* Mobile grid */}
       <div className="grid grid-cols-2 gap-4 mt-6 sm:hidden">
         {products.slice(0, 4).map((product) => (
           <ProductCard
             key={product._id}
             product={product}
-            showWishlistButton={true}
+            showWishlistButton
           />
         ))}
       </div>
 
-      <style jsx>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
     </div>
   );

@@ -16,32 +16,41 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-// Hooks reales integrados
-import { useCartContext } from "../../../modules/cart/context/CartContext";
-import { useWishlistContext } from "../../../modules/wishlist/context/WishlistContext";
-
+// ✅ MIGRADO: Dominio Products — fuente única de verdad
 import {
-  formatPrice,
-  calculateDiscountPercentage,
-} from "../utils/priceHelpers";
-import {
-  isNewProduct,
+  // Pricing
+  formatCOP,
+  getDiscountPercentage,
+  getAbsoluteSaving,
+  hasDiscount,
+  // Availability
+  canPurchase,
   isLowStock,
-  isProductAvailable,
   getAvailabilityStatus,
+  AVAILABILITY_STATUS,
+  // Validators
+  isNewProduct,
+  // Utils
   getPrimaryImage,
-} from "../utils/productHelpers";
+  IMAGE_CONFIG,
+} from "@/modules/products";
+
+// ✅ MIGRADO: Bridges de integración (solo estos conocen Cart y Wishlist)
+import { useProductCart } from "@/modules/products/integration/useProductCart";
+import { useProductWishlist } from "@/modules/products/integration/useProductWishlist";
 
 /**
  * @component ProductCard
- * @description Componente de tarjeta de producto con efectos visuales avanzados y lógica de negocio.
- * 
- * ✅ FIXES APLICADOS:
- * - Todas las variables correctamente extraídas del objeto product
- * - Verificación correcta de productos en wishlist usando isInWishlist()
- * - Estado local sincronizado con contexto global
- * - Manejo correcto de agregar/quitar de wishlist
- * - Integración correcta con CartContext
+ * @description Tarjeta de producto.
+ *
+ * CAMBIOS DE MIGRACIÓN:
+ * - useCartContext / useWishlistContext → useProductCart / useProductWishlist
+ * - formatPrice → formatCOP
+ * - calculateDiscountPercentage → getDiscountPercentage (recibe product directamente)
+ * - isProductAvailable → canPurchase
+ * - Eliminado estado local `isFavorite` — la fuente de verdad es useProductWishlist
+ * - Eliminado useEffect de sincronización de wishlist (anti-pattern)
+ * - Limpiados estados duplicados: isImageLoaded + imageLoaded → solo imageLoaded
  */
 export function ProductCard({
   product,
@@ -51,81 +60,67 @@ export function ProductCard({
   onToggleWishlist,
 }) {
   // ============================================================================
-  // HOOKS DE CONTEXTO
+  // HOOKS DE INTEGRACIÓN
   // ============================================================================
-  const { 
-    addItem, 
-    isProductInCart, 
+  const {
+    isProductInCart,
     getProductQuantity,
-    loading: cartLoading 
-  } = useCartContext();
-  
-  const { 
-    isInWishlist, 
-    addItem: addToWishlist, 
-    removeItem: removeFromWishlist 
-  } = useWishlistContext();
+    quickAddToCart,
+    loading: cartLoading,
+  } = useProductCart();
+
+  const {
+    isProductInWishlist,
+    toggleProductWishlist,
+    loading: wishlistLoading,
+  } = useProductWishlist();
 
   // ============================================================================
   // ESTADOS LOCALES
   // ============================================================================
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [isImageError, setIsImageError] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
 
   // ============================================================================
-  // EXTRACCIÓN DE DATOS DEL PRODUCTO
+  // EXTRACCIÓN DE DATOS DEL PRODUCTO (entidad canónica)
   // ============================================================================
-  
-  // Datos básicos
-  const _id = product?._id || product?.id;
-  const name = product?.name || "Producto sin nombre";
-  const slug = product?.slug || _id;
-  const price = product?.price || 0;
-  const comparePrice = product?.comparePrice || product?.originalPrice || 0;
+  const _id = product?._id ?? product?.id;
+  const name = product?.name ?? "Producto sin nombre";
+  const slug = product?.slug ?? _id;
   const stock = product?.stock ?? 0;
-  const brand = product?.brand || null;
-  const isFeatured = product?.isFeatured || product?.featured || false;
-  const salesCount = product?.salesCount || product?.sales || 0;
-  
-  // Categoría
-  const mainCategory = product?.mainCategory || product?.category || null;
-  
-  // Rating
-  const rating = product?.rating || null;
-  const averageRating = rating?.average || 0;
-  const ratingCount = rating?.count || product?.numReviews || 0;
-  
-  // Imagen
+  const brand = product?.brand ?? null;
+  const isFeatured = product?.isFeatured ?? false;
+  const salesCount = product?.salesCount ?? 0;
+  const mainCategory = product?.mainCategory ?? null;
+
+  const rating = product?.rating ?? null;
+  const averageRating = rating?.average ?? 0;
+  const ratingCount = rating?.count ?? 0;
+
   const primaryImage = getPrimaryImage(product);
 
   // ============================================================================
-  // CÁLCULOS DERIVADOS
+  // CÁLCULOS DERIVADOS (dominio puro — no duplicados)
   // ============================================================================
-  
-  const discountPercentage = calculateDiscountPercentage(comparePrice, price);
+  const price = product?.price ?? 0;
+  const comparePrice = product?.comparePrice ?? 0;
+
+  // ✅ Funciones del dominio en lugar de helpers locales
+  const discountPct = hasDiscount(product) ? getDiscountPercentage(product) : 0;
+  const saving = hasDiscount(product) ? getAbsoluteSaving(product) : 0;
   const isNew = isNewProduct(product);
   const lowStock = isLowStock(product);
-  const available = isProductAvailable(product);
+  const available = canPurchase(product);
   const availabilityStatus = getAvailabilityStatus(product);
 
   // Estados del carrito
   const inCart = isProductInCart(_id);
   const quantityInCart = getProductQuantity(_id);
 
-  // ============================================================================
-  // SINCRONIZACIÓN CON WISHLIST
-  // ============================================================================
-  
-  useEffect(() => {
-    if (_id) {
-      const inWishlist = isInWishlist(_id);
-      setIsFavorite(inWishlist);
-    }
-  }, [_id, isInWishlist]);
+  // ✅ Fuente de verdad: hook (elimina sincronización manual con useEffect)
+  const isFavorite = isProductInWishlist(_id);
 
   // ============================================================================
   // HANDLERS
@@ -135,61 +130,34 @@ export function ProductCard({
     e.preventDefault();
     e.stopPropagation();
 
-    if (!product || !_id) {
-      console.error("Error: Intentando agregar un producto inválido", product);
-      return;
-    }
-
-    if (!available) {
-      console.warn("Producto no disponible");
-      return;
-    }
+    if (!product || !_id || !available) return;
 
     try {
-      if (addItem) {
-        await addItem(product, 1, {});
-      } else if (onAddToCart) {
+      if (onAddToCart) {
         await onAddToCart(product, 1, {});
+      } else {
+        await quickAddToCart(product);
       }
     } catch (error) {
-      console.error("Error al agregar al carrito:", error);
+      console.error("[ProductCard] Error al agregar al carrito:", error);
     }
   };
 
   const handleToggleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (!_id) {
-      console.error("Producto sin ID válido");
-      return;
-    }
+
+    if (!_id || isWishlistLoading || wishlistLoading) return;
 
     setIsWishlistLoading(true);
-
     try {
-      if (isFavorite) {
-        // Quitar de wishlist
-        await removeFromWishlist(_id);
-        setIsFavorite(false);
-      } else {
-        // Agregar a wishlist
-        await addToWishlist({
-          productId: _id,
-          notifyPriceChange: false,
-          notifyAvailability: false,
-        });
-        setIsFavorite(true);
-      }
-
-      // Callback opcional (si se pasa desde padre)
       if (onToggleWishlist) {
         await onToggleWishlist(product);
+      } else {
+        await toggleProductWishlist(product);
       }
     } catch (error) {
-      console.error("Error toggling wishlist:", error);
-      // Revertir estado en caso de error
-      setIsFavorite(!isFavorite);
+      console.error("[ProductCard] Error toggling wishlist:", error);
     } finally {
       setIsWishlistLoading(false);
     }
@@ -215,32 +183,28 @@ export function ProductCard({
     }
 
     switch (availabilityStatus) {
-      case "out_of_stock":
+      case AVAILABILITY_STATUS.OUT_OF_STOCK:
         return {
           text: "Agotado",
           disabled: true,
           className: "bg-gray-300 text-gray-600 cursor-not-allowed",
           icon: AlertCircle,
         };
-
-      case "low_stock":
+      case AVAILABILITY_STATUS.LOW_STOCK:
         return {
           text: "Agregar al carrito",
           disabled: false,
           className: "bg-orange-500 hover:bg-orange-600 text-white",
           icon: ShoppingCart,
         };
-
-      case "backorder":
+      case AVAILABILITY_STATUS.BACKORDER:
         return {
           text: "Bajo pedido",
           disabled: false,
           className: "bg-blue-500 hover:bg-blue-600 text-white",
           icon: ShoppingCart,
         };
-
-      case "available":
-      case "in_stock":
+      case AVAILABILITY_STATUS.AVAILABLE:
       default:
         return {
           text: "Agregar al carrito",
@@ -258,7 +222,6 @@ export function ProductCard({
   // ============================================================================
   // RENDER
   // ============================================================================
-
   return (
     <div
       className={`group relative ${className}`}
@@ -273,10 +236,10 @@ export function ProductCard({
         >
           {/* BADGES SUPERIORES */}
           <div className="absolute top-2 left-2 z-20 flex flex-wrap gap-1.5 max-w-[calc(100%-80px)]">
-            {discountPercentage > 0 && (
+            {discountPct > 0 && (
               <div className="flex items-center gap-1 bg-gradient-to-r from-red-500 to-orange-500 text-white px-2 py-1 rounded-full text-[10px] font-bold shadow-md">
                 <Zap className="h-2.5 w-2.5 fill-current" />
-                <span>-{discountPercentage}%</span>
+                <span>-{discountPct}%</span>
               </div>
             )}
             {isFeatured && (
@@ -310,14 +273,16 @@ export function ProductCard({
             <div className="absolute top-2 right-2 z-20">
               <button
                 onClick={handleToggleWishlist}
-                disabled={isWishlistLoading}
+                disabled={isWishlistLoading || wishlistLoading}
                 className={`h-10 w-10 rounded-full backdrop-blur-md shadow-lg transition-all duration-300 flex items-center justify-center ${
-                  isFavorite 
-                    ? "bg-red-500 text-white scale-110" 
+                  isFavorite
+                    ? "bg-red-500 text-white scale-110"
                     : "bg-white/90 text-gray-700 hover:scale-110 hover:bg-red-50"
                 } ${isWishlistLoading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <Heart className={`h-5 w-5 transition-all ${isFavorite ? "fill-current" : ""}`} />
+                <Heart
+                  className={`h-5 w-5 transition-all ${isFavorite ? "fill-current" : ""}`}
+                />
               </button>
             </div>
           )}
@@ -327,24 +292,19 @@ export function ProductCard({
             <div className="relative aspect-square bg-white">
               {!imageLoaded && (
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 animate-pulse flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-primary"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-primary" />
                 </div>
               )}
-
               <img
-                src={isImageError ? getPrimaryImage({}) : primaryImage}
+                src={isImageError ? IMAGE_CONFIG.FALLBACK_URL : primaryImage}
                 alt={name}
                 className={`h-full w-full object-cover transition-all duration-700 ${
                   imageLoaded ? "opacity-100" : "opacity-0"
                 } ${isHovered ? "scale-110 rotate-2" : "scale-100 rotate-0"}`}
-                onLoad={() => {
-                  setIsImageLoaded(true);
-                  setImageLoaded(true);
-                }}
+                onLoad={() => setImageLoaded(true)}
                 onError={() => {
                   if (!isImageError) {
                     setIsImageError(true);
-                    setIsImageLoaded(true);
                     setImageLoaded(true);
                   }
                 }}
@@ -396,7 +356,9 @@ export function ProductCard({
             ) : (
               mainCategory && (
                 <div className="text-[9px] uppercase tracking-wider font-bold text-primary/70">
-                  {mainCategory.name}
+                  {typeof mainCategory === "string"
+                    ? mainCategory
+                    : mainCategory?.name}
                 </div>
               )
             )}
@@ -431,18 +393,18 @@ export function ProductCard({
             <div className="pt-1">
               <div className="flex items-baseline gap-2">
                 <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  {formatPrice(price)}
+                  {formatCOP(price)}
                 </span>
                 {comparePrice > price && (
                   <span className="text-xs line-through text-gray-400">
-                    {formatPrice(comparePrice)}
+                    {formatCOP(comparePrice)}
                   </span>
                 )}
               </div>
-              {discountPercentage > 0 && (
+              {discountPct > 0 && (
                 <div className="text-[10px] font-semibold text-green-600 flex items-center mt-0.5">
                   <Sparkles className="h-3 w-3 mr-1" />
-                  Ahorras {formatPrice(comparePrice - price)}
+                  Ahorras {formatCOP(saving)}
                 </div>
               )}
             </div>
@@ -458,7 +420,7 @@ export function ProductCard({
             </button>
 
             {/* ADVERTENCIA STOCK BAJO */}
-            {available && availabilityStatus === "low_stock" && (
+            {available && availabilityStatus === AVAILABILITY_STATUS.LOW_STOCK && (
               <div className="text-center">
                 <span className="text-[10px] text-orange-600 font-semibold flex items-center justify-center gap-1">
                   <TrendingUp className="h-3 w-3" />

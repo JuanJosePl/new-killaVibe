@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { ShoppingCart, Check, Heart, Loader } from "lucide-react";
-import { useProductCart } from "../hooks/useProductCart";
-import { useProductWishlist } from "../hooks/useProductWishlist";
-import { isProductAvailable } from "../utils/productHelpers";
+
+// ✅ MIGRADO: Bridges de integración del módulo Products
+import { useProductCart } from "@/modules/products/integration/useProductCart";
+import { useProductWishlist } from "@/modules/products/integration/useProductWishlist";
+
+// ✅ MIGRADO: Regla de dominio pura — en lugar de isProductAvailable de productHelpers
+import { canPurchase } from "@/modules/products";
 
 /**
  * @component AddToCartButton
- * @description Botón standalone para agregar al carrito con todas las validaciones
  *
- * ✅ USA:
- * - useProductCart() - estado real del carrito
- * - isProductAvailable() - validación de disponibilidad
- * - Stock checking integrado
+ * CAMBIOS DE MIGRACIÓN:
+ * - import from "../hooks/useProductCart" → integration/useProductCart
+ * - isProductAvailable(product) → canPurchase(product)  [dominio puro]
  */
 export function AddToCartButton({
   product,
@@ -34,7 +36,8 @@ export function AddToCartButton({
 
   const inCart = isProductInCart(product._id);
   const quantityInCart = getProductQuantity(product._id);
-  const available = isProductAvailable(product);
+  // ✅ canPurchase reemplaza isProductAvailable (misma lógica, fuente única)
+  const available = canPurchase(product);
 
   const handleClick = async (e) => {
     e.preventDefault();
@@ -54,7 +57,6 @@ export function AddToCartButton({
     }
   };
 
-  // ✅ Variantes de estilo
   const variants = {
     primary:
       "bg-gradient-to-r from-primary to-accent text-white hover:shadow-xl hover:shadow-primary/20",
@@ -111,12 +113,10 @@ export function AddToCartButton({
 
 /**
  * @component WishlistButton
- * @description Botón standalone para wishlist con estado persistente
  *
- * ✅ USA:
- * - useProductWishlist() - estado real de wishlist
- * - Persistencia en backend
- * - Animaciones de toggle
+ * CAMBIOS DE MIGRACIÓN:
+ * - import from "../hooks/useProductWishlist" → integration/useProductWishlist
+ * - Interface pública idéntica
  */
 export function WishlistButton({
   product,
@@ -146,7 +146,6 @@ export function WishlistButton({
     }
   };
 
-  // ✅ Variantes de estilo
   const variants = {
     icon: `rounded-full ${
       inWishlist
@@ -208,7 +207,7 @@ export function WishlistButton({
 
 /**
  * @component QuickActionsBar
- * @description Barra combinada de acciones rápidas (cart + wishlist)
+ * Sin cambios — delega a los componentes ya migrados.
  */
 export function QuickActionsBar({ product, className = "" }) {
   return (

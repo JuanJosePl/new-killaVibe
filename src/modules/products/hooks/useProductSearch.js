@@ -1,88 +1,74 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import productsApi from "../api/products.api";
-import { SEARCH_CONFIG } from "../types/product.types";
-
 /**
  * @hook useProductSearch
- * @description Hook para búsqueda de productos con debounce
- * @param {number} debounceMs - Tiempo de debounce en ms
+ * @description Búsqueda de productos con debounce y AbortController.
+ * Estado completamente local. Independiente de useProductList.
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { SEARCH_CONFIG } from '../types/product.types';
+
+/**
+ * @param {import('../repository/products.repository').ProductsRepository} repository
+ * @param {number} [debounceMs=300]
  * @returns {Object}
  */
-export const useProductSearch = (debounceMs = SEARCH_CONFIG.DEBOUNCE_MS) => {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+export const useProductSearch = (repository, debounceMs = SEARCH_CONFIG.DEBOUNCE_MS) => {
+  const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const abortControllerRef = useRef(null);
+
+  const abortRef = useRef(null);
 
   // Debounce del query
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, debounceMs);
-
+    const timer = setTimeout(() => setDebouncedQuery(query), debounceMs);
     return () => clearTimeout(timer);
   }, [query, debounceMs]);
 
-  // Realizar búsqueda cuando cambia el debouncedQuery
+  // Ejecutar búsqueda cuando cambia el debouncedQuery
   useEffect(() => {
-    if (
-      !debouncedQuery ||
-      debouncedQuery.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH
-    ) {
+    if (debouncedQuery.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH) {
       setResults([]);
-      setLoading(false);
+      setIsLoading(false);
       return;
     }
 
-    const searchProducts = async () => {
-      // Cancelar request anterior si existe
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+    const doSearch = async () => {
+      // Cancelar request anterior
+      if (abortRef.current) abortRef.current.abort();
+      abortRef.current = new AbortController();
 
-      abortControllerRef.current = new AbortController();
+      setIsLoading(true);
+      setError(null);
 
       try {
-        setLoading(true);
-        setError(null);
-
-        const response = await productsApi.searchProducts(
+        const products = await repository.search(
           debouncedQuery.trim(),
           SEARCH_CONFIG.DEFAULT_LIMIT
         );
-
-        if (response.success) {
-          setResults(response.data || []);
-        } else {
-          setError(response.message);
-          setResults([]);
-        }
+        setResults(products);
       } catch (err) {
-        if (err.name !== "AbortError") {
-          console.error("Search error:", err);
-          setError(err.response?.data?.message || "Error en la búsqueda");
+        if (err?.name !== 'AbortError' && err?.code !== 'AbortError') {
+          setError(err);
           setResults([]);
         }
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
-    searchProducts();
+    doSearch();
 
-    // Cleanup
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
+      if (abortRef.current) abortRef.current.abort();
     };
-  }, [debouncedQuery]);
+  }, [debouncedQuery, repository]);
 
   const clearSearch = useCallback(() => {
-    setQuery("");
-    setDebouncedQuery("");
+    setQuery('');
+    setDebouncedQuery('');
     setResults([]);
     setError(null);
   }, []);
@@ -91,183 +77,142 @@ export const useProductSearch = (debounceMs = SEARCH_CONFIG.DEBOUNCE_MS) => {
     query,
     setQuery,
     results,
-    loading,
+    isLoading,
     error,
     clearSearch,
     hasResults: results.length > 0,
-    isSearching: query.length >= SEARCH_CONFIG.MIN_QUERY_LENGTH,
+    isSearching: query.trim().length >= SEARCH_CONFIG.MIN_QUERY_LENGTH,
   };
 };
 
+// ─────────────────────────────────────────────
+// SUGGESTIONS
+// ─────────────────────────────────────────────
+
 /**
- * @hook useSearchHistory
- * @description Hook para manejo de historial de búsqueda
- * @param {number} maxItems - Máximo de items en historial
- * @returns {Object}
+ * @hook useProductSuggestions
+ * @description Sugerencias de búsqueda (versión reducida para dropdowns).
+ * AbortController propio, independiente de useProductSearch.
  */
-export const useSearchHistory = (maxItems = 10) => {
-  const isBrowser = typeof window !== "undefined";
+export const useProductSuggestions = (repository) => {
+  const [suggestions, setSuggestions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const abortRef = useRef(null);
 
-  const [history, setHistory] = useState(() => {
-    if (!isBrowser) return [];
-    try {
-      const saved = localStorage.getItem("search_history");
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("[useSearchHistory] Error leyendo localStorage", e);
-      return [];
-    }
-  });
-
-  const addToHistory = useCallback(
-    (query) => {
-      if (
-        !isBrowser ||
-        !query ||
-        query.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH
-      ) {
+  const fetchSuggestions = useCallback(
+    async (query) => {
+      if (!query || query.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH) {
+        setSuggestions([]);
         return;
       }
 
-      setHistory((prev) => {
-        const newHistory = [
-          query,
-          ...prev.filter((q) => q !== query),
-        ].slice(0, maxItems);
+      if (abortRef.current) abortRef.current.abort();
+      abortRef.current = new AbortController();
 
-        try {
-          localStorage.setItem(
-            "search_history",
-            JSON.stringify(newHistory)
-          );
-        } catch (e) {
-          console.error("[useSearchHistory] Error guardando historial", e);
-        }
+      setIsLoading(true);
 
-        return newHistory;
-      });
-    },
-    [maxItems, isBrowser]
-  );
-
-  const removeFromHistory = useCallback(
-    (query) => {
-      if (!isBrowser) return;
-
-      setHistory((prev) => {
-        const newHistory = prev.filter((q) => q !== query);
-
-        try {
-          localStorage.setItem(
-            "search_history",
-            JSON.stringify(newHistory)
-          );
-        } catch (e) {
-          console.error("[useSearchHistory] Error eliminando item", e);
-        }
-
-        return newHistory;
-      });
-    },
-    [isBrowser]
-  );
-
-  const clearHistory = useCallback(() => {
-    if (!isBrowser) return;
-
-    setHistory([]);
-    try {
-      localStorage.removeItem("search_history");
-    } catch (e) {
-      console.error("[useSearchHistory] Error limpiando historial", e);
-    }
-  }, [isBrowser]);
-
-  return {
-    history,
-    addToHistory,
-    removeFromHistory,
-    clearHistory,
-  };
-};
-
-
-/**
- * @hook useSearchSuggestions
- * @description Hook para obtener sugerencias de búsqueda
- * @returns {Object}
- */
-export const useSearchSuggestions = () => {
-  const [suggestions, setSuggestions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const abortRef = useRef(null);
-
-  const fetchSuggestions = useCallback(async (query) => {
-    if (
-      !query ||
-      query.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH
-    ) {
-      setSuggestions([]);
-      return;
-    }
-
-    // Cancelar request anterior
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
-
-    abortRef.current = new AbortController();
-
-    try {
-      setLoading(true);
-
-      const response = await productsApi.searchProducts(
-        query.trim(),
-        5,
-        {
-          signal: abortRef.current.signal,
-        }
-      );
-
-      if (response?.success) {
-        const productSuggestions = Array.isArray(response.data)
-          ? response.data.map((p) => ({
-              type: "product",
-              text: p?.name ?? "",
-              slug: p?.slug ?? "",
-              image: p?.images?.[0]?.url ?? null,
-            }))
-          : [];
-
-        setSuggestions(productSuggestions);
-      } else {
-        setSuggestions([]);
-      }
-    } catch (err) {
-      if (err.name !== "AbortError") {
-        console.error(
-          "[useSearchSuggestions] Error obteniendo sugerencias",
-          err
+      try {
+        const products = await repository.search(
+          query.trim(),
+          SEARCH_CONFIG.SUGGESTIONS_LIMIT
         );
-        setSuggestions([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
+        setSuggestions(
+          products.map((p) => ({
+            type: 'product',
+            text: p.name ?? '',
+            slug: p.slug ?? '',
+            image: p.images?.[0]?.url ?? null,
+            price: p.price,
+          }))
+        );
+      } catch (err) {
+        if (err?.name !== 'AbortError' && err?.code !== 'AbortError') {
+          setSuggestions([]);
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [repository]
+  );
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
+      if (abortRef.current) abortRef.current.abort();
     };
   }, []);
 
-  return {
-    suggestions,
-    loading,
-    fetchSuggestions,
-  };
+  const clearSuggestions = useCallback(() => setSuggestions([]), []);
+
+  return { suggestions, isLoading, fetchSuggestions, clearSuggestions };
 };
 
+// ─────────────────────────────────────────────
+// SEARCH HISTORY (módulo puro con localStorage)
+// ─────────────────────────────────────────────
+
+const HISTORY_KEY = 'product_search_history';
+
+/**
+ * @hook useSearchHistory
+ * @description Historial de búsqueda persistido en localStorage.
+ * Estado local simple. No necesita context ni store global.
+ */
+export const useSearchHistory = (maxItems = SEARCH_CONFIG.HISTORY_MAX_ITEMS) => {
+  const isBrowser = typeof window !== 'undefined';
+
+  const readFromStorage = () => {
+    if (!isBrowser) return [];
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const writeToStorage = (items) => {
+    if (!isBrowser) return;
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    } catch {
+      /* storage might be unavailable */
+    }
+  };
+
+  const [history, setHistory] = useState(readFromStorage);
+
+  const addToHistory = useCallback(
+    (query) => {
+      if (!query || query.trim().length < SEARCH_CONFIG.MIN_QUERY_LENGTH) return;
+
+      setHistory((prev) => {
+        const next = [query, ...prev.filter((q) => q !== query)].slice(0, maxItems);
+        writeToStorage(next);
+        return next;
+      });
+    },
+    [maxItems] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  const removeFromHistory = useCallback((query) => {
+    setHistory((prev) => {
+      const next = prev.filter((q) => q !== query);
+      writeToStorage(next);
+      return next;
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    if (isBrowser) {
+      try { localStorage.removeItem(HISTORY_KEY); } catch { /* noop */ }
+    }
+  }, [isBrowser]);
+
+  return { history, addToHistory, removeFromHistory, clearHistory };
+};
+
+export default useProductSearch;

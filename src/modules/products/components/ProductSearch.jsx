@@ -1,17 +1,25 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, X, Clock, TrendingUp, ArrowRight } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useProductSearch, useSearchHistory } from "../hooks/useProductSearch";
-import { formatPrice } from "../utils/priceHelpers";
+
+// ✅ MIGRADO: Hooks del módulo Products
+import {
+  useProductsRepository,
+  useProductSearch,
+  useSearchHistory,
+  formatCOP,
+} from "@/modules/products";
 
 /**
  * @component ProductSearch
- * @description Barra de búsqueda con autocomplete y sugerencias reales
  *
- * ✅ USA:
- * - useProductSearch() - búsqueda con debounce
- * - useSearchHistory() - historial persistente
- * - Endpoint: GET /products/search/:query
+ * CAMBIOS DE MIGRACIÓN:
+ * - import from "../hooks/useProductSearch" → @/modules/products
+ * - useProductSearch() ahora requiere `repository` como argumento
+ * - useSearchHistory() igual, requiere `repository` (no usa HTTP, solo localStorage)
+ *   → se instancia sin repo ya que solo usa localStorage
+ * - formatPrice → formatCOP
+ * - product.image → getPrimaryImage(product) para imagen en sugerencias
  */
 export function ProductSearch({ className = "", onSearch }) {
   const navigate = useNavigate();
@@ -19,21 +27,25 @@ export function ProductSearch({ className = "", onSearch }) {
   const dropdownRef = useRef(null);
   const [showDropdown, setShowDropdown] = useState(false);
 
+  // ✅ Repository inyectado una vez
+  const repo = useProductsRepository();
+
   const {
     query,
     setQuery,
     results,
-    loading,
+    isLoading: loading,
     error,
     clearSearch,
     hasResults,
     isSearching,
-  } = useProductSearch();
+  } = useProductSearch(repo);
 
+  // useSearchHistory no usa HTTP — maxItems por defecto 10
   const { history, addToHistory, removeFromHistory, clearHistory } =
     useSearchHistory();
 
-  // ✅ Click outside handler
+  // Click outside handler
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -45,15 +57,12 @@ export function ProductSearch({ className = "", onSearch }) {
         setShowDropdown(false);
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ✅ Handlers
   const handleInputChange = (e) => {
-    const value = e.target.value;
-    setQuery(value);
+    setQuery(e.target.value);
     setShowDropdown(true);
   };
 
@@ -61,9 +70,7 @@ export function ProductSearch({ className = "", onSearch }) {
     e.preventDefault();
     if (query.trim().length >= 2) {
       addToHistory(query);
-      if (onSearch) {
-        onSearch(query);
-      }
+      if (onSearch) onSearch(query);
       navigate(`/productos/buscar?q=${encodeURIComponent(query)}`);
       setShowDropdown(false);
       inputRef.current?.blur();
@@ -73,9 +80,7 @@ export function ProductSearch({ className = "", onSearch }) {
   const handleHistoryClick = (searchTerm) => {
     setQuery(searchTerm);
     addToHistory(searchTerm);
-    if (onSearch) {
-      onSearch(searchTerm);
-    }
+    if (onSearch) onSearch(searchTerm);
     navigate(`/productos/buscar?q=${encodeURIComponent(searchTerm)}`);
     setShowDropdown(false);
   };
@@ -116,13 +121,13 @@ export function ProductSearch({ className = "", onSearch }) {
         </div>
       </form>
 
-      {/* ✅ Dropdown de Resultados */}
+      {/* Dropdown */}
       {shouldShowDropdown && (
         <div
           ref={dropdownRef}
           className="absolute top-full mt-2 w-full bg-white rounded-2xl border border-gray-200 shadow-2xl max-h-[500px] overflow-y-auto z-50"
         >
-          {/* ✅ Resultados de búsqueda */}
+          {/* Resultados */}
           {isSearching && hasResults && (
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -130,52 +135,52 @@ export function ProductSearch({ className = "", onSearch }) {
                   Resultados ({results.length})
                 </h4>
                 {loading && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
                 )}
               </div>
-
               <div className="space-y-2">
-                {results.slice(0, 5).map((product) => (
-                  <Link
-                    key={product._id}
-                    to={`/productos/${product.slug}`}
-                    onClick={() => {
-                      addToHistory(query);
-                      setShowDropdown(false);
-                    }}
-                    className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors group"
-                  >
-                    {/* Imagen */}
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
-                      {product.image ? (
-                        <img
-                          src={product.image}
-                          alt={product.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <Search className="h-6 w-6" />
-                        </div>
-                      )}
-                    </div>
+                {results.slice(0, 5).map((product) => {
+                  // ✅ Usar images[] canónico en lugar de product.image
+                  const thumbUrl =
+                    product.images?.[0]?.url ?? product.images?.[0] ?? null;
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate group-hover:text-primary">
-                        {product.name}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        {formatPrice(product.price)}
-                      </p>
-                    </div>
-
-                    {/* Arrow */}
-                    <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-primary transition-colors" />
-                  </Link>
-                ))}
+                  return (
+                    <Link
+                      key={product._id}
+                      to={`/productos/${product.slug}`}
+                      onClick={() => {
+                        addToHistory(query);
+                        setShowDropdown(false);
+                      }}
+                      className="flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors group"
+                    >
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                        {thumbUrl ? (
+                          <img
+                            src={thumbUrl}
+                            alt={product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-400">
+                            <Search className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate group-hover:text-primary">
+                          {product.name}
+                        </p>
+                        {/* ✅ formatPrice → formatCOP */}
+                        <p className="text-xs text-gray-600">
+                          {formatCOP(product.price)}
+                        </p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-gray-400 group-hover:text-primary transition-colors" />
+                    </Link>
+                  );
+                })}
               </div>
-
               {results.length > 5 && (
                 <button
                   onClick={handleSubmit}
@@ -187,15 +192,15 @@ export function ProductSearch({ className = "", onSearch }) {
             </div>
           )}
 
-          {/* ✅ Loading State */}
+          {/* Loading */}
           {loading && query.length >= 2 && !hasResults && (
             <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mx-auto mb-2"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent mx-auto mb-2" />
               <p className="text-sm text-gray-600">Buscando...</p>
             </div>
           )}
 
-          {/* ✅ No Results */}
+          {/* Sin resultados */}
           {isSearching && !loading && !hasResults && query.length >= 2 && (
             <div className="p-8 text-center">
               <Search className="h-12 w-12 text-gray-300 mx-auto mb-2" />
@@ -208,14 +213,16 @@ export function ProductSearch({ className = "", onSearch }) {
             </div>
           )}
 
-          {/* ✅ Error State */}
+          {/* Error */}
           {error && (
             <div className="p-8 text-center">
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-red-600">
+                {error?.message ?? "Error en la búsqueda"}
+              </p>
             </div>
           )}
 
-          {/* ✅ Historial de búsqueda */}
+          {/* Historial */}
           {!isSearching && history.length > 0 && (
             <div className="p-4 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
@@ -230,7 +237,6 @@ export function ProductSearch({ className = "", onSearch }) {
                   Limpiar
                 </button>
               </div>
-
               <div className="space-y-1">
                 {history.slice(0, 5).map((searchTerm, index) => (
                   <div
@@ -255,7 +261,7 @@ export function ProductSearch({ className = "", onSearch }) {
             </div>
           )}
 
-          {/* ✅ Sugerencias populares (cuando no hay historial ni búsqueda) */}
+          {/* Sugerencias populares */}
           {!isSearching && history.length === 0 && (
             <div className="p-4">
               <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
@@ -283,9 +289,7 @@ export function ProductSearch({ className = "", onSearch }) {
   );
 }
 
-/**
- * @component SearchBar (Versión compacta para header)
- */
+/** @component SearchBar — versión compacta para header */
 export function SearchBar({ className = "" }) {
   return (
     <ProductSearch
