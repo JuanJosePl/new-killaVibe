@@ -7,7 +7,7 @@ import { useCustomerCart } from '../context/CustomerCartContext';
 import { useCustomerWishlist } from '../context/CustomerWishlistContext';
 import { useCustomerActivity } from '../context/CustomerActivityContext';
 import { useCustomerProducts } from '../context/CustomerProductsContext'; // ✅ NUEVO
-import customerOrdersApi from '../api/customerOrders.api';
+import customerOrdersApi from '../../orders/customerOrders.api';
 import customerActivityApi from '../api/customerActivity.api';
 import {
   WelcomeHeader,

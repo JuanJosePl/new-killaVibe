@@ -153,4 +153,4 @@ export {
   getPrimaryImage,
   getAllImageUrls,
   getVariantImage,
-} from './utils/product.image.helpers';
+} from './helper/product.image.helpers';

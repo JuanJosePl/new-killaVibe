@@ -1,4 +1,4 @@
-// src/modules/customer/api/customerWishlist.api.js
+// src/modules/customer/api/customerWishlist
 
 import customerApiClient from '../utils/customerApiClient';
 

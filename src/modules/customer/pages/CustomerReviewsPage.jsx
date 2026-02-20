@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCustomerActivity } from '../context/CustomerActivityContext';
 import customerReviewsApi from '../api/customerReviews.api';
-import customerOrdersApi from '../api/customerOrders.api';
+import customerOrdersApi from '../../orders/customerOrders.api';
 import {
   ReviewCard,
   ReviewModal,

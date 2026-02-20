@@ -3,14 +3,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useCustomerActivity } from "../context/CustomerActivityContext";
-import customerOrdersApi from "../api/customerOrders.api";
+import customerOrdersApi from "../../orders/customerOrders.api";
 import {
   OrderTracking,
   OrderSummary,
   AddressCard,
   ReturnModal,
   OrderItemCard,
-} from "../components/orders";
+} from "../../orders/orders";
 import { LoadingSpinner, ConfirmDialog } from "../components/common";
 
 /**

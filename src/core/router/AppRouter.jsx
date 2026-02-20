@@ -6,10 +6,10 @@ import { Suspense, lazy } from "react";
 import { PrivateRoute } from "../guards/PrivateRoute";
 import { AdminRoute } from "../guards/AdminRoute";
 
-import Layout from "../../app/Layout";
+import Layout from "../../pages/Layout";
 import AdminLayout from "../../modules/admin/layout/AdminLayout";
-import CustomerLayout from "../../modules/customer/layout/CustomerLayout";
-import CustomerProviders from "../../modules/customer/providers/CustomerProviders";
+import CustomerLayout from "../../modules/panel/layout/CustomerLayout";
+//import CustomerProviders from "../../modules/panel/providers/CustomerProviders";
 
 import { useScrollToTop } from "../hooks/useScroll";
 
@@ -27,17 +27,17 @@ const LoadingScreen = () => (
   </div>
 );
 
-const HomePage = lazy(() => import("../../app/PaginaPrincipal"));
-const AboutPage = lazy(() => import("../../app/sobre-nosotros/SobreNosotros"));
-const WarrantyPage = lazy(() => import("../../app/garantia/Garantia"));
-const ReturnsPage = lazy(() => import("../../app/devoluciones/Devoluciones"));
-const ShippingPage = lazy(() => import("../../app/envios/Envios"));
-const NotFoundPage = lazy(() => import("../../app/PaginaNoEncontrada"));
-const OffersPage = lazy(() => import("../../app/ofertas/Ofertas"));
-const CookiesPage = lazy(() => import("../../app/cookies/Cookies"));
-const FAQPage = lazy(() => import("../../app/FAQ/FAQ"));
-const PrivacidadPage = lazy(() => import("../../app/privacidad/Privacidad"));
-const TerminosPage = lazy(() => import("../../app/terminos/Terminos"));
+const HomePage = lazy(() => import("../../pages/PaginaPrincipal"));
+const AboutPage = lazy(() => import("../../pages/sobre-nosotros/SobreNosotros"));
+const WarrantyPage = lazy(() => import("../../pages/legal/Garantia"));
+const ReturnsPage = lazy(() => import("../../pages/legal/Devoluciones"));
+const ShippingPage = lazy(() => import("../../pages/legal/Envios"));
+const NotFoundPage = lazy(() => import("../../pages/PaginaNoEncontrada"));
+const OffersPage = lazy(() => import("../../modules/products/pages/ofertas/Ofertas"));
+const CookiesPage = lazy(() => import("../../pages/legal/Cookies"));
+const FAQPage = lazy(() => import("../../pages/FAQ/FAQ"));
+const PrivacidadPage = lazy(() => import("../../pages/legal/Privacidad"));
+const TerminosPage = lazy(() => import("../../pages/legal/Terminos"));
 
 const ProductsListPage = lazy(() =>
   import("../../modules/products/pages/ProductosLista")
@@ -46,7 +46,7 @@ const ProductDetailPage = lazy(() =>
   import("../../modules/products/pages/detalle/ProductoDetalle")
 );
 
-const CheckoutPage = lazy(() => import('../../app/checkout/Checkout'));
+const CheckoutPage = lazy(() => import('../../modules//checkout/Checkout'));
 
 const CategoriesPage = lazy(() =>
   import("../../modules/categories/pages/CategoriesPage")
@@ -66,42 +66,42 @@ const ContactPage = lazy(() => import("../../modules/contact/pages/Contacto"));
 const LoginPage = lazy(() => import("../../modules/auth/pages/Login"));
 const RegisterPage = lazy(() => import("../../modules/auth/pages/Register"));
 
-const CustomerDashboardPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerDashboardPage")
-);
-const CustomerCartPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerCartPage")
-);
-const CustomerCategoriesPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerCategoriesPage")
-);
-const CustomerCategoryDetailPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerCategoryDetailPage")
-);
-const CustomerContactPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerContactPage")
-);
-const CustomerOrdersPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerOrdersPage")
-);
-const CustomerOrderDetailPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerOrderDetailPage")
-);
-const CustomerProductsPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerProductsPage")
-);
-const CustomerProductDetailPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerProductDetailPage")
-);
-const CustomerProfilePage = lazy(() =>
-  import("../../modules/customer/pages/CustomerProfilePage")
-);
-const CustomerReviewsPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerReviewsPage")
-);
-const CustomerWishlistPage = lazy(() =>
-  import("../../modules/customer/pages/CustomerWishlistPage")
-);
+// const CustomerDashboardPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerDashboardPage")
+// );
+// const CustomerCartPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerCartPage")
+// );
+// const CustomerCategoriesPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerCategoriesPage")
+// );
+// const CustomerCategoryDetailPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerCategoryDetailPage")
+// );
+// const CustomerContactPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerContactPage")
+// );
+// const CustomerOrdersPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerOrdersPage")
+// );
+// const CustomerOrderDetailPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerOrderDetailPage")
+// );
+// const CustomerProductsPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerProductsPage")
+// );
+// const CustomerProductDetailPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerProductDetailPage")
+// );
+// const CustomerProfilePage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerProfilePage")
+// );
+// const CustomerReviewsPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerReviewsPage")
+// );
+// const CustomerWishlistPage = lazy(() =>
+//   import("../../modules/customer/pages/CustomerWishlistPage")
+// );
 
 const AdminDashboard = lazy(() =>
   import("../../modules/admin/pages/Dashboard")
@@ -178,7 +178,7 @@ export default function AppRouter() {
         <Route path="auth/login" element={<LoginPage />} />
         <Route path="auth/register" element={<RegisterPage />} />
 
-        <Route
+        {/* <Route
           path="customer"
           element={
             <PrivateRoute>
@@ -209,7 +209,7 @@ export default function AppRouter() {
             <Route index element={<CustomerProductsPage />} />
             <Route path=":slug" element={<CustomerProductDetailPage />} />
           </Route>
-        </Route>
+        </Route> */}
 
         <Route
           path="admin"

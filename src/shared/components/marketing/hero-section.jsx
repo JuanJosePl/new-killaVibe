@@ -21,8 +21,8 @@ import { Link } from 'react-router-dom';
 // HOOKS Y APIS DEL PROYECTO
 // ============================================================================
 import  productsAPI  from '../../../modules/products/api/products.api';
-import { formatPrice } from '../../../modules/products/utils/priceHelpers';
-import { getPrimaryImage } from '../../../modules/products/utils/productHelpers';
+import { formatPriceNumber } from '../../../modules/products';
+import { getPrimaryImage } from '../../../modules/products';
 
 /**
  * @component HeroSection
@@ -537,11 +537,11 @@ useEffect(() => {
                         <div className="flex items-end justify-between pt-2">
                           <div className="space-y-1">
                             <div className="text-3xl font-bold">
-                              {formatPrice(product.price)}
+                              {formatPriceNumber(product.price)}
                             </div>
                             {product.comparePrice > product.price && (
                               <div className="text-sm line-through text-white/60">
-                                {formatPrice(product.comparePrice)}
+                                {formatPriceNumber(product.comparePrice)}
                               </div>
                             )}
                           </div>

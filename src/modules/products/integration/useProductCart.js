@@ -28,8 +28,8 @@ import {
 import { AVAILABILITY_MESSAGES, AVAILABILITY_STATUS } from '../types/product.types';
 
 // Dominio Cart (ya migrado)
-import { useCartActions } from '../../cart/hooks/useCartActions';
-import { useCart } from '../../cart/hooks/useCart';
+import  useCartActions  from '../../cart/presentation/hooks/useCartActions';
+import useCart from '../../cart/presentation/hooks/useCart';
 import { useAuth } from '../../../core/hooks/useAuth';
 
 // ─────────────────────────────────────────────

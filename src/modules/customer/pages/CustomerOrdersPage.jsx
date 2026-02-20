@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCustomerActivity } from "../context/CustomerActivityContext";
-import customerOrdersApi from "../api/customerOrders.api";
-import { OrderCard, EmptyOrders } from "../components/orders";
+import customerOrdersApi from "../../orders/customerOrders.api";
+import { OrderCard, EmptyOrders } from "../../orders/orders";
 import { LoadingSpinner } from "../components/common";
 
 /**
